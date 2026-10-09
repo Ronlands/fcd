@@ -1,0 +1,20 @@
+{
+  "name": "furrypattern-cad-workspace",
+  "version": "0.8.0",
+  "private": true,
+  "type": "module",
+  "main": "workflow-update/dist/main/main.cjs",
+  "scripts": {
+    "start": "node workflow-update/scripts/start.mjs",
+    "dev": "npm --prefix workflow-update run dev",
+    "build": "npm --prefix workflow-update run build",
+    "build:rust": "npm --prefix workflow-update run build:rust",
+    "typecheck": "npm --prefix workflow-update run typecheck",
+    "test": "npm --prefix workflow-update test",
+    "test:rust": "npm --prefix workflow-update run test:rust",
+    "test:desktop": "npm --prefix workflow-update run test:desktop",
+    "check": "npm --prefix workflow-update run check",
+    "verify": "npm --prefix workflow-update run verify",
+    "package": "npm --prefix workflow-update run package"
+  }
+}

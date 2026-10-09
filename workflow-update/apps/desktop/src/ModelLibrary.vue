@@ -1,0 +1,14 @@
+<script setup lang="ts">
+import {localize} from './localization';
+
+import {computed,ref} from 'vue';
+import {useSession} from './store';
+import {modelSourceLabel,modelRecordName} from './modules/model-labels';
+const props=defineProps<{language:'zh'|'en'}>(),store=useSession(),zh=computed(()=>props.language==='zh'),search=ref('');
+const models=computed(()=>store.data.project?.modelLibrary?.filter(m=>(m.name+modelRecordName(m.name,m.surface,zh.value)).toLowerCase().includes(search.value.toLowerCase()))??[]);
+async function activate(id:string){const p=store.data.project;if(p&&p.surface?.id!==id)await store.run(()=>window.fpcad.apply(p.id,p.revision,{type:'model.activate',modelId:id}));}
+async function rename(id:string,name:string){const p=store.data.project;if(p)await store.run(()=>window.fpcad.apply(p.id,p.revision,{type:'model.rename',modelId:id,name}));}
+async function remove(id:string){const p=store.data.project;if(p)await store.run(()=>window.fpcad.apply(p.id,p.revision,{type:'model.delete',modelId:id}));}
+</script>
+<template><details class="model-library" open><summary>{{zh?'已保存模型':localize('Saved models')}} · {{models.length}}</summary><input v-model="search" :placeholder="zh?'搜索模型':localize('Search models')" aria-label="搜索模型"><div class="model-record" v-for="model in models" :key="model.id"><button :class="{active:model.id===store.data.project?.surface?.id}" :disabled="store.busy" @click="activate(model.id)">{{model.id===store.data.project?.surface?.id?'●':'○'}} {{modelRecordName(model.name,model.surface,zh)}}<small>{{model.surface.faces.length}} {{zh?'面':localize('faces')}} · {{modelSourceLabel(model.surface.source,zh)}}</small></button><input :value="modelRecordName(model.name,model.surface,zh)" :aria-label="zh?'模型名称':localize('Model name')" maxlength="120" @change="rename(model.id,($event.target as HTMLInputElement).value)"><button class="danger" :disabled="store.busy" @click="remove(model.id)">{{zh?'删除模型':localize('Delete model')}}</button></div><small>{{zh?'导入和生成后自动保存到项目模型库；选择模型会恢复它的花纹和裁片。增删改均可撤销。':localize('Imports and generated models are saved automatically. Selecting restores their markings and cuts. Changes are undoable.')}}</small></details></template>
+<style scoped>.model-library{padding:15px;border-bottom:1px solid var(--border)}summary{font-size:13px;cursor:pointer}.model-library>input{margin:10px 0}.model-record{display:grid;grid-template-columns:1fr auto;gap:6px;margin:10px 0;padding-bottom:12px;border-bottom:1px solid var(--border)}.model-record>button:first-child{grid-column:1/-1;text-align:left}.model-record input{min-width:0}.model-record small,.model-library>small{display:block;color:var(--accent);font-size:10px;line-height:1.7}.model-record>button:last-child{font-size:10px;padding:5px}.active{border-color:var(--accent)}</style>

@@ -1,0 +1,295 @@
+{
+  "surface": {
+    "id": "edd0ad78-a10e-4ebd-b899-b6ab424be004",
+    "topologyVersion": 2,
+    "source": "obj",
+    "vertices": [
+      {
+        "id": "f2436fd2-2873-4072-a981-e226d0363d17",
+        "xMm": 124.39281463623047,
+        "yMm": 8.399999618530273,
+        "zMm": 190.39999389648438
+      },
+      {
+        "id": "c3674e3f-5132-443e-8f1b-467e281bce7d",
+        "xMm": 111.51402282714844,
+        "yMm": 20.701515197753906,
+        "zMm": 219.8000030517578
+      },
+      {
+        "id": "d45c7595-7b4c-4f9e-9594-8c9f3adfdc9c",
+        "xMm": 124.39281463623047,
+        "yMm": 20.701515197753906,
+        "zMm": 231.97787475585938
+      }
+    ],
+    "faces": [
+      {
+        "id": "c727d687-c8d4-44be-8633-b04141bb1f3b",
+        "vertices": [
+          "c3674e3f-5132-443e-8f1b-467e281bce7d",
+          "f2436fd2-2873-4072-a981-e226d0363d17",
+          "d45c7595-7b4c-4f9e-9594-8c9f3adfdc9c"
+        ],
+        "region": "toe-right-1"
+      }
+    ]
+  },
+  "markings": [
+    {
+      "placement": {
+        "algorithm": "anatomy-2",
+        "rotationRad": 0,
+        "sourceGroupHash": "057150f531c6bca168f80ed71e48d003b14ffae09f199271f6b349236a5d4832",
+        "part": "foot",
+        "side": "left",
+        "modelSide": "right",
+        "regions": [
+          "foot-claw-right-0",
+          "foot-claw-right-1",
+          "foot-claw-right-2",
+          "foot-claw-right-3",
+          "toe-right-0",
+          "toe-right-1",
+          "toe-right-2",
+          "toe-right-3",
+          "foot-right"
+        ],
+        "scaleX": 0.5201033481331758,
+        "scaleY": 0.5201033481331758,
+        "sourceCenter": {
+          "xMm": 198.75,
+          "yMm": 134.0625
+        },
+        "targetCenter": {
+          "xMm": 143.2816982269287,
+          "yMm": 70
+        },
+        "reviewed": true
+      },
+      "id": "fe96f367-f619-4f26-bc44-d7b9b65c6f95",
+      "name": "正面 待分类 未定侧 / 9 / 脚 左侧",
+      "color": "#fefaf8",
+      "editMode": "projected",
+      "source": "reference",
+      "sourcePieceId": "99becdb7-312a-4c08-829f-8cc1d1efa900",
+      "sourceHash": "3f50534c00bd5170a528e369097a21cf8caae1a061d55e76037020a945eed64e",
+      "surfaceId": "edd0ad78-a10e-4ebd-b899-b6ab424be004",
+      "topologyVersion": 2,
+      "surfaceHash": "624c77897d3847bc15cb0b1e8051d47839430fc49d84c7b73d6a8445acb3cb56",
+      "view": "front",
+      "offsetXmm": 0,
+      "offsetYmm": 0,
+      "fragments": [
+        {
+          "faceId": "c727d687-c8d4-44be-8633-b04141bb1f3b",
+          "rings": [
+            [
+              [
+                2.6482337646326005e-14,
+                0.6874080270540887,
+                0.3125919729458848
+              ],
+              [
+                2.6482337646326005e-14,
+                0.32215395945808417,
+                0.6778460405418893
+              ],
+              [
+                0.06289647074332982,
+                0.4239191064827627,
+                0.5131844227739075
+              ],
+              [
+                0.25328047422756367,
+                0.3242599974649559,
+                0.4224595283074805
+              ],
+              [
+                0.3090310536235022,
+                1.8483387187449462e-14,
+                0.6909689463764794
+              ],
+              [
+                0.9942636216184063,
+                1.8483387187449462e-14,
+                0.005736378381575204
+              ],
+              [
+                0.9942636216184063,
+                0.005736378381571969,
+                2.1718737919229625e-14
+              ],
+              [
+                0.6525631967739168,
+                0.34743680322608284,
+                3.3306690738754696e-16
+              ],
+              [
+                0.25198374120711936,
+                0.7480162587928803,
+                4.440892098500626e-16
+              ]
+            ]
+          ]
+        }
+      ],
+      "paths": []
+    },
+    {
+      "placement": {
+        "algorithm": "anatomy-2",
+        "rotationRad": 0,
+        "sourceGroupHash": "057150f531c6bca168f80ed71e48d003b14ffae09f199271f6b349236a5d4832",
+        "part": "foot",
+        "side": "left",
+        "modelSide": "right",
+        "regions": [
+          "foot-claw-right-0",
+          "foot-claw-right-1",
+          "foot-claw-right-2",
+          "foot-claw-right-3",
+          "toe-right-0",
+          "toe-right-1",
+          "toe-right-2",
+          "toe-right-3",
+          "foot-right"
+        ],
+        "scaleX": 0.5201033481331758,
+        "scaleY": 0.5201033481331758,
+        "sourceCenter": {
+          "xMm": 198.75,
+          "yMm": 134.0625
+        },
+        "targetCenter": {
+          "xMm": 143.2816982269287,
+          "yMm": 70
+        },
+        "reviewed": true
+      },
+      "id": "1a03c465-62b9-44ba-b902-b45d2e929192",
+      "name": "正面 脚 左侧 / 38",
+      "color": "#fcb8a4",
+      "editMode": "projected",
+      "source": "reference",
+      "sourcePieceId": "67d7c612-e30e-4487-87e8-58ec8c4b8836",
+      "sourceHash": "6d3b616876185938ee1797b9da09f5bcf8807a60db3df91b7b0ab98ebe9832e2",
+      "surfaceId": "edd0ad78-a10e-4ebd-b899-b6ab424be004",
+      "topologyVersion": 2,
+      "surfaceHash": "624c77897d3847bc15cb0b1e8051d47839430fc49d84c7b73d6a8445acb3cb56",
+      "view": "front",
+      "offsetXmm": 0,
+      "offsetYmm": 0,
+      "fragments": [
+        {
+          "faceId": "c727d687-c8d4-44be-8633-b04141bb1f3b",
+          "rings": [
+            [
+              [
+                2.6482337646326005e-14,
+                0.26294191963469693,
+                0.7370580803652765
+              ],
+              [
+                2.6482337646326005e-14,
+                1.5595357939410485e-14,
+                0.9999999999999579
+              ],
+              [
+                0.3564038529225601,
+                1.5595357939410485e-14,
+                0.6435961470774243
+              ],
+              [
+                0.35741698640452274,
+                0.004119499271681616,
+                0.6384635143237957
+              ],
+              [
+                0.18972900409728075,
+                0.4615743831045528,
+                0.34869661279816644
+              ]
+            ]
+          ]
+        }
+      ],
+      "paths": []
+    },
+    {
+      "placement": {
+        "algorithm": "anatomy-2",
+        "rotationRad": 0,
+        "sourceGroupHash": "057150f531c6bca168f80ed71e48d003b14ffae09f199271f6b349236a5d4832",
+        "part": "foot",
+        "side": "left",
+        "modelSide": "right",
+        "regions": [
+          "foot-claw-right-0",
+          "foot-claw-right-1",
+          "foot-claw-right-2",
+          "foot-claw-right-3",
+          "toe-right-0",
+          "toe-right-1",
+          "toe-right-2",
+          "toe-right-3",
+          "foot-right"
+        ],
+        "scaleX": 0.5201033481331758,
+        "scaleY": 0.5201033481331758,
+        "sourceCenter": {
+          "xMm": 198.75,
+          "yMm": 134.0625
+        },
+        "targetCenter": {
+          "xMm": 143.2816982269287,
+          "yMm": 70
+        },
+        "reviewed": true
+      },
+      "id": "193236d1-27c4-4cdc-9e38-1e50eda92b22",
+      "name": "正面 脚 左侧 / 39",
+      "color": "#fcb8a4",
+      "editMode": "projected",
+      "source": "reference",
+      "sourcePieceId": "ee2acae0-e362-45c3-8ab9-9ba16cd35229",
+      "sourceHash": "f2c4c4d604299717a54e7a87cd6bd4f31aaefa69984f0192d7f22293f357c7ec",
+      "surfaceId": "edd0ad78-a10e-4ebd-b899-b6ab424be004",
+      "topologyVersion": 2,
+      "surfaceHash": "624c77897d3847bc15cb0b1e8051d47839430fc49d84c7b73d6a8445acb3cb56",
+      "view": "front",
+      "offsetXmm": 0,
+      "offsetYmm": 0,
+      "fragments": [
+        {
+          "faceId": "c727d687-c8d4-44be-8633-b04141bb1f3b",
+          "rings": [
+            [
+              [
+                0.9622112114310197,
+                3.638916852529113e-14,
+                0.03778878856894388
+              ],
+              [
+                0.9999999999999636,
+                3.638916852529113e-14,
+                2.6146682414003163e-17
+              ],
+              [
+                0.989661556801924,
+                0.010338443198075989,
+                0
+              ],
+              [
+                0.957666977603765,
+                0.04233302239619748,
+                3.756023270184983e-14
+              ]
+            ]
+          ]
+        }
+      ],
+      "paths": []
+    }
+  ]
+}

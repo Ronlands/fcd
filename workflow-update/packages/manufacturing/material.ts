@@ -1,0 +1,10 @@
+import type {Project,Piece,Issue,NestingOptions} from '../schema/index';
+export const materialFor=(project:Project,piece:Piece)=>project.materials?.find(m=>m.id===piece.materialId);
+export function resolvePiece(project:Project,piece:Piece):Piece{const material=materialFor(project,piece);return {...piece,material:material?.name??piece.material,furRad:material?.grainRequired&&!material.furRequired&&piece.grainRad!==undefined?piece.grainRad:piece.furRad,allowanceMm:piece.allowanceSource==='project'?(project.defaultAllowanceMm??10):piece.allowanceSource==='material'?(material?.defaultAllowanceMm??piece.allowanceMm):piece.allowanceMm};}
+export function materialIssues(project:Project):Issue[]{return project.pieces.flatMap(p=>{const m=materialFor(project,p),issue=(messageKey:string,severity:'error'|'warning'='error')=>({ruleId:p.id+':'+messageKey,entityId:p.id,messageKey,severity});if(p.materialId&&!m||p.allowanceSource==='material'&&!m)return [issue('MATERIAL_MISSING')];if(!m)return [];const issues:Issue[]=[];if(m.grainRequired&&p.grainRad===undefined)issues.push(issue('MATERIAL_GRAIN_REQUIRED'));if(m.measurementSource==='estimated'&&(m.stretchWarpRatio>0||m.stretchWeftRatio>0||m.compensationMm>0))issues.push(issue('MATERIAL_ESTIMATED','warning'));return issues;});}
+const same=(a:number,b:number)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)))<1e-6;
+export function permittedAngles(project:Project,p:Piece,mirror:boolean,o:NestingOptions):number[]{const m=materialFor(project,p),fur=mirror?Math.PI-p.furRad:p.furRad,grain=p.grainRad===undefined?undefined:mirror?Math.PI-p.grainRad:p.grainRad;if(m?.grainRequired&&grain===undefined)return [];if(m?.furRequired&&m.grainRequired&&grain!==undefined&&!same(grain,fur))return [];
+ const required=m?.furRequired?fur:m?.grainRequired?grain:undefined,base=required===undefined?0:Math.PI/2-required;
+ if(o.alignGrain){const angle=required===undefined?Math.PI/2-fur:base;if(m&&!m.rotationsRad.some(r=>same(angle,base+r)))return [];return [angle];}
+ const rotations=o.rotationsRad??[0,Math.PI/2,Math.PI,3*Math.PI/2];return m?m.rotationsRad.filter(a=>rotations.some(b=>same(a,b))).map(a=>base+a):rotations;
+}

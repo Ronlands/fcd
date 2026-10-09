@@ -1,0 +1,17 @@
+import type {Piece,Project,Seam} from '../schema/index';
+/** Reverse direction without moving the contour; arc stations and edge profiles use the reversed edge. */
+export function reversePath(piece:Piece):Piece{
+ const nodes=[...piece.nodes].reverse(),end=new Map(piece.nodes.slice(0,piece.closed?undefined:-1).map((n,i)=>[n.id,piece.nodes[(i+1)%piece.nodes.length].id]));
+ return {...piece,nodes,curves:piece.curves?.map(c=>({...c,startNodeId:c.endNodeId,endNodeId:c.startNodeId,c1:c.c2,c2:c.c1})),notches:piece.notches?.map(n=>({...n,nodeId:end.get(n.nodeId)!,position:1-n.position})),edgeAllowances:piece.edgeAllowances?.map(e=>({...e,nodeId:e.endNodeId,endNodeId:e.nodeId,samples:[...e.samples].reverse().map(s=>({...s,s:1-s.s}))}))};
+}
+export function trimPath(piece:Piece,startId:string,endId:string):Piece{
+ if(piece.holes?.length)throw Error('PATH_HOLE_DEPENDENCY');let start=piece.nodes.findIndex(n=>n.id===startId),end=piece.nodes.findIndex(n=>n.id===endId);if(start<0||end<0||start===end)throw Error('INVALID_TRIM');if(!piece.closed&&end<start)throw Error('INVALID_TRIM');const nodes:Piece['nodes']=[];for(let j=start;;j=(j+1)%piece.nodes.length){nodes.push(piece.nodes[j]);if(j===end)break;}if(nodes.length<2)throw Error('PATH_MIN_NODES');const edges=new Set(nodes.slice(0,-1).map(n=>n.id));return {...piece,nodes,closed:false,holes:[],curves:piece.curves?.filter(c=>edges.has(c.startNodeId)),notches:piece.notches?.filter(n=>edges.has(n.nodeId)),edgeAllowances:piece.edgeAllowances?.filter(e=>edges.has(e.nodeId))};
+}
+export function joinPaths(a:Piece,b:Piece,reverseA=false,reverseB=false,toleranceMm=.01):Piece{
+ if(a.id===b.id||a.closed||b.closed||a.holes?.length||b.holes?.length)throw Error('PATH_OPEN_REQUIRED');if(a.materialId!==b.materialId||a.material!==b.material||a.allowanceMm!==b.allowanceMm||a.allowanceSource!==b.allowanceSource||a.cutQty!==b.cutQty||a.mirror!==b.mirror||Math.abs(a.furRad-b.furRad)>1e-8||a.grainRad!==b.grainRad)throw Error('PATH_METADATA_MISMATCH');if(a.sourceMaskId&&b.sourceMaskId&&a.sourceMaskId!==b.sourceMaskId)throw Error('PATH_SOURCE_MISMATCH');a=reverseA?reversePath(a):a;b=reverseB?reversePath(b):b;
+ const left=a.nodes.at(-1)!,right=b.nodes[0];if(Math.hypot(left.xMm-right.xMm,left.yMm-right.yMm)>toleranceMm)throw Error('PATH_ENDPOINT_GAP');
+ // Snap only the joining endpoint and its outgoing handle to the retained endpoint.
+ const dx=left.xMm-right.xMm,dy=left.yMm-right.yMm,id=(id:string)=>id===right.id?left.id:id;
+ return {...a,name:(a.name+' + '+b.name).slice(0,120),sourceMaskId:a.sourceMaskId??b.sourceMaskId,nodes:[...a.nodes,...b.nodes.slice(1)],curves:[...(a.curves??[]),...(b.curves??[]).map(c=>({...c,startNodeId:id(c.startNodeId),c1:c.startNodeId===right.id?{...c.c1,xMm:c.c1.xMm+dx,yMm:c.c1.yMm+dy}:c.c1}))],notches:[...(a.notches??[]),...(b.notches??[]).map(n=>({...n,nodeId:id(n.nodeId)}))],edgeAllowances:[...(a.edgeAllowances??[]),...(b.edgeAllowances??[]).map(e=>({...e,nodeId:id(e.nodeId)}))],labels:[...(a.labels??[]),...(b.labels??[])]};
+}
+export function remapPathSeams(project:Project,pieces:Piece[],remap?:(side:Seam['a'])=>Seam['a']):Seam[]{return (project.seams??[]).map(seam=>{const updated={...seam,a:remap?remap(seam.a):seam.a,b:remap?remap(seam.b):seam.b};for(const s of [updated.a,updated.b]){const p=pieces.find(p=>p.id===s.pieceId),i=p?.nodes.findIndex(n=>n.id===s.nodeId)??-1;if(!p||i<0||!p.closed&&i===p.nodes.length-1||p.nodes[(i+1)%p.nodes.length].id!==s.endNodeId)throw Error('SEAM_DEPENDENCY');}return updated;});}

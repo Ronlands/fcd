@@ -1,0 +1,28 @@
+{
+  "jpeg": {
+    "front": {
+      "pixels": "37d9bc44dc97506acf706ceaca0b4c7c64dfcbcc5d99deccebbee29a7fea486a",
+      "metadata": "52eeccdfced752df9039fdd6c3d377d2d0576a48f7074ba5f24fefeab0d0d737",
+      "partBounds": "53d608aea4e52d6f693de834bd4a1dcb0d26a135a9d23db92af9765c990e21a7"
+    },
+    "back": {
+      "pixels": "3711ee55c70bf7500f53eb0ffdd1373e0b80977d94a678a207d715e424098e5f",
+      "metadata": "e83f01649fd6ad3fe8d17a02a90cc09b7aa09d6fbe92e8e3254cf936cbd8890e",
+      "partBounds": "4685f29b5142fe13cd8d9b996f010fa3665ff3c754ce8b8db8aca5f9bacd601b"
+    },
+    "geometry": "484bb35b453341edb84a5bbd2a163a97c585c95b7850a416c1225755677aad61"
+  },
+  "blueWhite": {
+    "front": {
+      "pixels": "f92a3b7173130c82dc34dfd9c456a9536f665e01c6520299286d76589f278047",
+      "metadata": "f44d7a881e63d9b05a30a4cc892521e5c4cd033ec895137fc4fea63492efd8f3",
+      "partBounds": "70db89d06d398248df44279a4b59febf74a46f9fe8a1c3291f9e15d522f4715b"
+    },
+    "back": {
+      "pixels": "2df1faa1d75d09f29cd7782be61a2a99d00f16a71f6e2df6291f003068190d8d",
+      "metadata": "c4d9567ee8f08e36aaf066211f660ea747c816e2d1462025516f12c095138ab8",
+      "partBounds": "a9fe03bca56d735d6d2f4171051bf05f0056c252eef0ddbefda4283056152379"
+    },
+    "geometry": "be486c9c9ba686dd83f4db2f571f2f82d2ea1d5ad1b239363e917f99760cb5f6"
+  }
+}

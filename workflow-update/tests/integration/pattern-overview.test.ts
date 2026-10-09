@@ -1,0 +1,8 @@
+import {expect,it} from 'vitest';
+import {patternOverview} from '../../apps/desktop/main/print-preview-batch';
+import {svgExport} from '../../apps/desktop/main/export';
+import {svgPrintPlan} from '../../packages/manufacturing/print-pages';
+import {project,rectangle} from '../fixtures';
+import type {Geometry} from '../../packages/schema/index';
+it('267 exact cut outlines fit a balanced screen overview while actual-size print pages stay bounded',()=>{const p=project();p.pieces=Array.from({length:267},()=>({...rectangle(350,600),allowanceMm:0}));const geometry:Geometry[]=p.pieces.map(piece=>({id:piece.id,cut:piece.nodes,seam:piece.nodes,areaMm2:210000,perimeterMm:1900,issues:[]}));const overview=patternOverview(p,geometry,[]);expect(overview.pieceIds).toEqual(p.pieces.map(p=>p.id));expect(overview.svg.match(/<path fill="/g)).toHaveLength(267);expect(overview.widthMm/overview.heightMm).toBeGreaterThan(.7);expect(overview.widthMm/overview.heightMm).toBeLessThan(2);expect(overview.svg).not.toContain('undefined');expect(()=>svgPrintPlan(svgExport(p,geometry,[]),{widthMm:210,heightMm:297,marginMm:10,overlapMm:10})).toThrow('RESOURCE_LIMIT');expect(svgPrintPlan(svgExport({...p,pieces:[p.pieces[0]]},[geometry[0]],[]),{widthMm:210,heightMm:297,marginMm:10,overlapMm:10}).pages).toHaveLength(6);});
+it('screen overview retains the bounded output-instance guard',()=>{const p=project();p.pieces=[{...rectangle(),cutQty:2001}];const geometry:Geometry[]=[{id:p.pieces[0].id,cut:p.pieces[0].nodes,areaMm2:20000,perimeterMm:600,issues:[]}];expect(()=>patternOverview(p,geometry,[])).toThrow('RESOURCE_LIMIT');});

@@ -1,0 +1,4 @@
+import type {Reference} from '../schema/index';
+/** Content digests prevent repeatedly copying large pixels. Legacy references keep their prior fingerprint. */
+export function referenceKey(r:Reference):string{const a=r.resources;if(!a)return JSON.stringify(r);return JSON.stringify({id:r.id,name:r.name,view:r.view,width:r.width,height:r.height,calibration:r.calibration,resources:{version:a.version,source:{mime:a.source.mime,width:a.source.width,height:a.source.height,orientation:a.source.orientation,sha256:a.source.sha256,transform:a.source.transform},original:a.original,proxy:{width:a.proxy.width,height:a.proxy.height,sha256:a.proxy.sha256,scaleX:a.proxy.scaleX,scaleY:a.proxy.scaleY},thumbnail:{width:a.thumbnail.width,height:a.thumbnail.height,sha256:a.thumbnail.sha256,scaleX:a.thumbnail.scaleX,scaleY:a.thumbnail.scaleY}}});}
+export function referenceDisplay(r:Reference){return r.png;}

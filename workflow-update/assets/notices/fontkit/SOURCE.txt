@@ -1,0 +1,5 @@
+@pdf-lib/fontkit 1.1.1 declares MIT in its package.json and README.
+The npm package and upstream repository do not include a separate LICENSE file.
+NOTICE-README.md and package.json are copied without modification from the locked package.
+Source: https://github.com/Hopding/fontkit
+Missing standalone license text and bundled transitive attribution require release review.

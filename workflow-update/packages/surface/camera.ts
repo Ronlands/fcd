@@ -1,0 +1,3 @@
+export function cameraProject(rx:number,ry:number,depth:number,factor:number,perspective:boolean,distance:number){const inverseDepth=perspective?1/(distance-depth):1,zoom=perspective?distance*inverseDepth:1;return {x:rx*factor*zoom,y:-ry*factor*zoom,z:depth,inverseDepth};}
+/** Screen barycentrics must be divided by camera distance before mapping back to the surface. */
+export function perspectiveWeights(weights:[number,number,number],inverseDepth:number[]):[number,number,number]{const w=weights.map((v,i)=>v*inverseDepth[i]),sum=w.reduce((s,v)=>s+v,0);return w.map(v=>v/sum) as [number,number,number];}

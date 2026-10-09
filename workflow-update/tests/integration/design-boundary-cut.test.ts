@@ -1,0 +1,34 @@
+import {it,expect} from 'vitest';
+import {randomUUID} from 'node:crypto';
+import {resolve} from 'node:path';
+import {project,rectangle} from '../fixtures';
+import {parseObj,bindingIssues} from '../../apps/desktop/main/surface';
+import {projectMarking} from '../../apps/desktop/main/markings';
+import {editSurfaceCuts} from '../../apps/desktop/main/cut-tools';
+import {cutPreview} from '../../apps/desktop/main/cut-preview';
+import {analyze} from '../../apps/desktop/main/worker';
+import {gridMesh} from '../large-mesh-fixture';
+const worker=resolve('target/release/fpcad-worker.exe'),assets=resolve('dist/assets');
+it('a diamond and one explicit seam determine four planar pieces regardless of mesh batching',async()=>{
+ const p=project();p.pieces=[];p.surface=parseObj('v 0 0 0\nv 100 0 0\nv 200 0 0\nv 0 100 0\nv 100 100 0\nv 200 100 0\ng body\nf 1 2 5\nf 1 5 4\nf 2 3 6\nf 2 6 5');
+ const source=rectangle(100,60);source.allowanceMm=0;source.color='#cc3311';source.nodes=[[100,20],[150,50],[100,80],[50,50]].map(([xMm,yMm])=>({id:randomUUID(),xMm,yMm}));
+ p.patternLibrary=[{piece:source,referenceId:randomUUID(),view:'front',category:'body'}];p.markings=[await projectMarking(worker,p,source.id,'front',0,0)];
+ const saved={...p,...await editSurfaceCuts(worker,p,{type:'surface.section',name:'User seam',section:{axis:'x',positionMm:100}})},before=structuredClone(saved),candidate=await cutPreview(worker,saved.surface!,saved,{automaticCuts:true,colorBoundaryCuts:true,normalAngleDeg:60,maxFacesPerPatch:1,optimizeCuts:false},assets);
+ expect(saved).toEqual(before);expect(candidate.run.pieces).toHaveLength(4);
+ expect(candidate.run.pieces.filter(p=>p.color===source.color)).toHaveLength(2);expect(candidate.run.pieces.filter(p=>p.color==='#eceae5')).toHaveLength(2);
+ const faces=new Map(saved.surface!.faces.map(f=>[f.id,f])),vertices=new Map(saved.surface!.vertices.map(v=>[v.id,v]));let total=0,colored=0;
+ for(const binding of candidate.run.bindings){const positions=binding.report.faceIds.map(id=>faces.get(id)!).flatMap(f=>f.vertices.map(id=>vertices.get(id)!.xMm));expect(Math.min(...positions)>=100||Math.max(...positions)<=100).toBe(true);const trim=binding.trim!,xy=new Map(trim.vertices.map(v=>[v.id,v])),area=trim.triangles.reduce((s,t)=>{const [a,b,c]=t.vertices.map(id=>xy.get(id)!);return s+Math.abs((b.xMm-a.xMm)*(c.yMm-a.yMm)-(c.xMm-a.xMm)*(b.yMm-a.yMm))/2;},0);total+=area;if(candidate.run.pieces.find(p=>p.id===binding.pieceId)!.color===source.color)colored+=area;}
+ expect(total).toBeCloseTo(20000,5);expect(colored).toBeCloseTo(3000,5);const ready={...saved,pieces:candidate.run.pieces,bindings:candidate.run.bindings,markings:candidate.markings};expect(bindingIssues(ready).filter(i=>i.severity==='error')).toEqual([]);expect((await analyze(worker,ready)).flatMap(g=>g.issues.filter(i=>i.severity==='error'))).toEqual([]);expect(candidate.run.bindings.every(b=>b.report.distortionMax<1e-6)).toBe(true);
+});
+it('the default strategy is invariant under dense tessellation and anatomical labels',async()=>{
+ const p=project();p.pieces=[];p.surface=gridMesh(20,21);const source=rectangle(100,60);source.allowanceMm=0;source.color='#cc3311';source.nodes=[[100,75],[150,105],[100,135],[50,105]].map(([xMm,yMm])=>({id:randomUUID(),xMm,yMm}));p.patternLibrary=[{piece:source,referenceId:randomUUID(),view:'front',category:'body'}];p.markings=[await projectMarking(worker,p,source.id,'front',0,0)];const saved={...p,...await editSurfaceCuts(worker,p,{type:'surface.section',name:'User seam',section:{axis:'x',positionMm:100}})},candidate=await cutPreview(worker,saved.surface!,saved,{automaticCuts:true,colorBoundaryCuts:true},assets);expect(candidate.run.pieces).toHaveLength(4);expect(candidate.run.options!.partitionStrategy).toBe('design');expect(candidate.run.designCutReport).toEqual({materialDomains:4,userSeams:1,topologySeams:0,distortionSeams:0,manufacturingSeams:0});expect(candidate.run.bindings.every(b=>b.report.edgeErrorMax<1e-6)).toBe(true);
+});
+it('adds a curvature dart to an otherwise unflattenable cone instead of accepting severe distortion',async()=>{
+ const points=[[0,0,100],[100,0,0],[0,100,0],[-100,0,0],[0,-100,0]],vertices=points.map(([xMm,yMm,zMm])=>({id:randomUUID(),xMm,yMm,zMm})),faces=[[0,1,2],[0,2,3],[0,3,4],[0,4,1]].map(ids=>({id:randomUUID(),vertices:ids.map(i=>vertices[i].id) as [string,string,string],region:'cone'})),p=project();p.pieces=[];p.surface={id:randomUUID(),topologyVersion:1,source:'obj',vertices,faces};const candidate=await cutPreview(worker,p.surface,p,{method:'arap',automaticCuts:true},assets);expect(candidate.run.pieces).toHaveLength(1);expect(candidate.run.bindings[0].report.edgeErrorMax).toBeLessThan(.1);expect(candidate.run.bindings[0].report.areaErrorMax).toBeLessThan(.15);expect(candidate.run.bindings[0].report.distortionMax).toBeLessThan(.15);
+});
+it('keeps planar material holes instead of adding topology seams to flatten an annulus',async()=>{
+ const p=project();p.pieces=[];p.surface=parseObj('v 0 0 0\nv 200 0 0\nv 200 200 0\nv 0 200 0\ng body\nf 1 2 3\nf 1 3 4');const source=rectangle(80,80);source.allowanceMm=0;source.nodes.forEach(n=>{n.xMm+=60;n.yMm+=60;});source.holes=[[[80,80],[80,120],[120,120],[120,80]].map(([xMm,yMm])=>({id:randomUUID(),xMm,yMm}))];p.patternLibrary=[{piece:source,referenceId:randomUUID(),view:'front',category:'body'}];p.markings=[await projectMarking(worker,p,source.id,'front',0,0)];const candidate=await cutPreview(worker,p.surface,p,{automaticCuts:true,colorBoundaryCuts:true},assets);expect(candidate.run.pieces).toHaveLength(3);expect(candidate.run.pieces.find(p=>p.color===source.color)!.holes).toHaveLength(1);expect(candidate.run.pieces.filter(p=>p.holes?.length)).toHaveLength(2);expect((await analyze(worker,{...p,pieces:candidate.run.pieces,bindings:candidate.run.bindings,markings:candidate.markings})).flatMap(g=>g.issues.filter(i=>i.severity==='error'))).toEqual([]);
+});
+it('opens a developable cylinder with one necessary slit instead of face-count or normal-angle panels',async()=>{
+ const n=12,radius=30,height=80,vertices=Array.from({length:n*2},(_,i)=>({id:randomUUID(),xMm:radius*Math.cos(i%n*2*Math.PI/n),yMm:i<n?0:height,zMm:radius*Math.sin(i%n*2*Math.PI/n)})),faces=Array.from({length:n},(_,i)=>{const a=i,b=(i+1)%n,c=i+n,d=(i+1)%n+n;return [[a,c,b],[b,c,d]].map(ids=>({id:randomUUID(),vertices:ids.map(i=>vertices[i].id) as [string,string,string],region:'body-'+i}));}).flat(),p=project();p.pieces=[];p.surface={id:randomUUID(),topologyVersion:1,source:'obj',vertices,faces};const candidate=await cutPreview(worker,p.surface,p,{method:'arap',automaticCuts:true,maxFacesPerPatch:1,normalAngleDeg:5},assets);expect(candidate.run.pieces).toHaveLength(1);expect(candidate.run.bindings[0].report.edgeErrorMax).toBeLessThan(1e-6);expect(candidate.run.bindings[0].report.areaErrorMax).toBeLessThan(1e-6);expect(candidate.run.bindings[0].report.distortionMax).toBeLessThan(1e-6);
+});

@@ -1,0 +1,34 @@
+import {desktopScreenshot} from './desktop-screenshot.mjs';
+import {fitReferenceView} from './reference-controls.mjs';
+import {waitForState} from './wait-state.mjs';
+import {_electron as electron} from 'playwright';
+import assert from 'node:assert/strict';
+import {mkdtemp,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import UPNG from '@pdf-lib/upng';
+import {desktopArgs,executablePath,testedBuild} from './desktop-launch.mjs';
+import {workflow,openDetails} from './ui-navigation.mjs';
+const codec=UPNG.default??UPNG,directory=await mkdtemp(resolve('.local/tests/reference-workspace-'));
+const env={...process.env,FPCAD_DATA_DIR:directory};delete env.ELECTRON_RUN_AS_NODE;
+const app=await electron.launch({args:desktopArgs,executablePath,env}),page=await app.firstWindow(),errors=[],checks=[];
+page.setDefaultTimeout(8000);
+page.on('pageerror',error=>errors.push(error.message));
+try{
+ await page.waitForFunction(()=>!!window.fpcad);
+ const file=resolve(directory,'reference.png'),rgba=new Uint8Array(200*200*4).fill(255);
+ for(let y=20;y<180;y++)for(let x=20;x<180;x++)rgba.set([30,160,210,255],(y*200+x)*4);
+ await writeFile(file,Buffer.from(codec.encode([rgba.buffer],200,200,0)));
+ await app.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},file);
+ const seeded=await page.evaluate(async()=>{let r=await window.fpcad.create({name:'选区与局部缩放回归',unit:'mm'});for(const view of ['front','back']){r=await window.fpcad.importReference(r.data.project.id,r.data.project.revision,view);const reference=r.data.project.references.find(item=>item.view===view);r=await window.fpcad.apply(r.data.project.id,r.data.project.revision,{type:'reference.calibrate',referenceId:reference.id,calibration:{a:{x:0,y:200},b:{x:0,y:0},distanceMm:200}});}return r;});
+ assert(seeded.ok,JSON.stringify(seeded));await page.reload();await workflow(page,'references');await page.getByLabel('界面模式',{exact:true}).selectOption('true');
+ const editor=page.locator('.mask-editor'),tool=page.getByLabel('Selection tool'),svg=page.locator('.mask-view'),viewport=page.getByRole('region',{name:'Pen selection viewport',exact:true});
+ const state=()=>page.evaluate(async()=>{const r=await window.fpcad.read();return r.data.project;});const initial=await state();
+ const draw=async(vertices)=>{await page.locator('.image-tools').getByRole('button',{name:'自由套索',exact:true}).click();await svg.scrollIntoViewIfNeeded();const points=await svg.evaluate((svg,v)=>v.map(([x,y])=>{const p=new DOMPoint(x,y).matrixTransform(svg.getScreenCTM());return {x:p.x,y:p.y};}),vertices);await page.mouse.move(points[0].x,points[0].y);await page.mouse.down();for(const p of points.slice(1))await page.mouse.move(p.x,p.y,{steps:4});await page.mouse.up();};
+ await viewport.getByRole('button',{name:'放大',exact:true}).click();await draw([[80,80],[120,80],[120,120],[80,120]]);assert.equal((await state()).revision,initial.revision);assert.equal(await svg.locator('.pen-node').count(),4);
+ await page.getByRole('button',{name:'确认选区并加入花纹库',exact:true}).click();await waitForState(page,async()=>!!(await window.fpcad.read()).data.project.referenceRun?.accepted);assert.equal((await state()).referenceRun.pixelCount,1600);assert.equal((await state()).patternLibrary.length,1);assert.equal((await state()).revision,initial.revision+1);await page.getByRole('button',{name:'载入候选为可编辑路径',exact:true}).click();await page.locator('.workspace-heading strong').click();await fitReferenceView(page);checks.push('zoomed lasso retains editable nodes and computes the exact 40 by 40 source-pixel region only on confirmation');
+ const before=await svg.locator('.draft-path').getAttribute('d');await svg.scrollIntoViewIfNeeded();const start=await svg.evaluate(svg=>{const p=new DOMPoint(60,60).matrixTransform(svg.getScreenCTM());return {x:p.x,y:p.y};});await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(start.x+20,start.y+20);assert(await viewport.getByRole('button',{name:'适合窗口',exact:true}).isDisabled());const camera=await svg.getAttribute('viewBox');await page.mouse.wheel(0,-180);assert.equal(await svg.getAttribute('viewBox'),camera);await page.keyboard.press('Escape');await page.mouse.up();assert.equal(await svg.locator('.draft-path').getAttribute('d'),before);checks.push('Escape cancels atomically and camera controls are frozen during drawing');
+ await svg.scrollIntoViewIfNeeded();const box=await svg.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down({button:'middle'});await page.mouse.move(box.x+box.width/2+40,box.y+box.height/2+20);await page.mouse.up({button:'middle'});assert.notEqual(await svg.getAttribute('viewBox'),camera);assert.equal(await svg.locator('.draft-path').getAttribute('d'),before);checks.push('middle-drag pans without painting');
+ const joint=page.getByRole('region',{name:'Pen selection viewport',exact:true});await joint.locator('svg.mask-view').scrollIntoViewIfNeeded();const focal=await joint.locator('svg.mask-view').evaluate(svg=>{const b=svg.getBoundingClientRect(),x=Math.floor(b.x+b.width/2),y=Math.floor(b.y+b.height/2),p=new DOMPoint(x,y).matrixTransform(svg.getScreenCTM().inverse());return {x,y,wx:p.x,wy:p.y};});await page.mouse.move(focal.x,focal.y);await page.mouse.wheel(0,-240);await page.waitForFunction(()=>document.querySelector('[aria-label="Pen selection viewport"] .zoom-percentage input').value!=='100');const after=await joint.locator('svg.mask-view').evaluate((svg,p)=>{const q=new DOMPoint(p.x,p.y).matrixTransform(svg.getScreenCTM().inverse());return {x:q.x,y:q.y};},focal);assert(Math.abs(after.x-focal.wx)<.01&&Math.abs(after.y-focal.wy)<.01);checks.push('the joint original preview zooms around the cursor');
+ await desktopScreenshot(app,page,{path:'test-results/reference-workspace.png'});
+ assert.deepEqual(errors,[]);await writeFile('test-results/reference-workspace.json',JSON.stringify({passed:true,testedBuild,directory,checks,errors},null,2));
+}catch(error){await desktopScreenshot(app,page,{path:'test-results/reference-workspace-failure.png'}).catch(()=>{});await writeFile('test-results/reference-workspace-failure.json',JSON.stringify({passed:false,checks,errors,error:String(error)},null,2));throw error;}finally{await app.close();}

@@ -1,0 +1,6 @@
+import {it,expect} from 'vitest';
+import {alignCompanion,companionRegions} from '../../packages/reference/cross-view';
+import type {Piece,Project} from '../../packages/schema/index';
+const piece=(color:string,x=0):Piece=>({id:crypto.randomUUID(),name:'区域',nodes:[[x,0],[x+10,0],[x+10,30],[x,30]].map(([xMm,yMm])=>({id:crypto.randomUUID(),xMm,yMm})),closed:true,allowanceMm:0,cutQty:1,mirror:false,material:'毛皮',furRad:0,color});
+it('registration preserves length, source coordinates, and holes without stretching',()=>{const base=piece('#efdd30'),other=piece('#edda38',50),before=structuredClone(other),registered=alignCompanion(base,other,true,Math.PI/2,5,8);expect(other).toEqual(before);for(let i=0;i<4;i++){const a=registered.nodes[i],b=registered.nodes[(i+1)%4];expect(Math.hypot(a.xMm-b.xMm,a.yMm-b.yMm)).toBeCloseTo(i%2?30:10);}expect(()=>alignCompanion(base,other,true,NaN)).toThrow('INVALID_PLACEMENT');});
+it('companion ranking excludes same view and strongly different pigment',()=>{type R=NonNullable<Project['patternLibrary']>[number];const a:R={piece:piece('#efdd30'),referenceId:crypto.randomUUID(),view:'front',category:'尾巴'},b:R={...a,piece:piece('#edda38'),referenceId:crypto.randomUUID(),view:'back'},c:R={...b,piece:piece('#0011dd')};expect(companionRegions(a,[a,b,c])).toEqual([b]);});

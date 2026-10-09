@@ -1,0 +1,11 @@
+import {build} from 'esbuild';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import sharp from 'sharp';
+await mkdir('.local/tests/contour-turns',{recursive:true});
+const file=resolve('.local/tests/contour-turns/helpers.mjs');await build({stdin:{contents:"export {smoothContour} from './packages/reference/smooth-contour';export {piecePath} from './packages/pattern/edit';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',outfile:file});const {smoothContour,piecePath}=await import(pathToFileURL(file));
+const fixture=JSON.parse(await readFile('tests/fixtures/character-front-yellow-thigh-contour.json','utf8')),raw={id:'thigh',name:'thigh',nodes:fixture.nodes.map(([xMm,yMm],i)=>({id:String(i),xMm,yMm})),holes:fixture.holes.map((h,j)=>h.map(([xMm,yMm],i)=>({id:`h${j}-${i}`,xMm,yMm}))),closed:true,allowanceMm:0,cutQty:1,mirror:false,material:'fur',furRad:0,color:fixture.color},fit=smoothContour(raw,.8,()=>crypto.randomUUID());
+const crop=await sharp('tests/fixtures/character-front-back.jpg').extract({left:839,top:410,width:170,height:190}).png().toBuffer(),rawPath=raw.nodes.map((p,i)=>`${i?'L':'M'}${p.xMm},${-p.yMm}`).join(' ')+'Z',labels=fit.nodes.map(p=>`<text x="${p.xMm+1}" y="${-p.yMm}" font-size="2.5">${p.id}</text>`).join('');
+const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="1140" viewBox="230 -340 170 190"><image x="230" y="-340" width="170" height="190" href="data:image/png;base64,${crop.toString('base64')}"/><path d="${rawPath}" fill="none" stroke="#00ccde" stroke-width=".22"/><path d="${piecePath(fit)}" fill="none" stroke="#f00099" stroke-width=".35"/>${labels}</svg>`;
+await sharp(Buffer.from(svg)).png().toFile('.local/tests/contour-turns/thigh.png');console.log(fit.nodes.map((n,i)=>({id:n.id,x:n.xMm,y:n.yMm,len:Math.hypot(fit.curves[i].c1.xMm-n.xMm,fit.curves[i].c1.yMm-n.yMm)})));

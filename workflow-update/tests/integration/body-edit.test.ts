@@ -1,0 +1,13 @@
+import {it,expect} from 'vitest';
+import {readFileSync} from 'node:fs';
+import {fitTemplate} from '../../apps/desktop/main/custom-template';
+import {fitSpecies,morphTemplate,sculptSurface} from '../../apps/desktop/main/body-edit';
+import {generateSpecies,speciesDefaults} from '../../apps/desktop/main/species';
+import {Repository} from '../../apps/desktop/main/repository';
+import {project} from '../fixtures';
+import {randomUUID} from 'node:crypto';
+it('built-in fit targets actual padded measurements across species, retaining topology and rejecting inconsistent paired targets',()=>{
+ for(const species of ['canine','feline','rabbit','bear','deer','dragon'] as const){const base=generateSpecies({...speciesDefaults(species),paddingMm:12,layerMm:4}),fit=fitSpecies(base,{chestGirth:1200,headWidth:300});expect(fit.template!.measurements.find(m=>m.name==='chestGirth')!.actualMm).toBeCloseTo(1200,2);expect(fit.template!.parameters.paddingMm).toBe(12);expect(fit.id).toBe(base.id);expect(fit.vertices.map(v=>v.id)).toEqual(base.vertices.map(v=>v.id));expect(()=>fitSpecies(base,{'upperArmGirth-left':400,'upperArmGirth-right':500})).toThrow('ASYMMETRIC_TARGETS');}
+});
+it('explicit Morph weights preserve original definition and solver provenance while rejecting ranges',()=>{const definition=JSON.parse(readFileSync('assets/templates/calibration-shell.fpctemplate','utf8')),base=fitTemplate(definition),name=definition.morphs[0].name,result=morphTemplate(base,{[name]:.1});expect(result.customTemplate!.weights[name]).toBeCloseTo(.1,12);expect(result.customTemplate!.definition).toEqual(base.customTemplate!.definition);expect(()=>morphTemplate(base,{[name]:9})).toThrow('TEMPLATE_TARGET_RANGE');});
+it('local sculpt has bounded falloff, keeps face identities, stores provenance and undoes atomically',()=>{const definition=JSON.parse(readFileSync('assets/templates/calibration-shell.fpctemplate','utf8')),base=fitTemplate(definition),center=base.vertices[0],result=sculptSurface(base,{center,radiusMm:20,delta:{xMm:2,yMm:0,zMm:0},mode:'move',strength:.5});expect(result.source).toBe('sculpt-1');expect(result.vertices[0].xMm-base.vertices[0].xMm).toBe(1);expect(result.vertices.slice(1)).toEqual(base.vertices.slice(1));expect(result.faces).toEqual(base.faces);const p=project();p.surface=base;const r=new Repository(':memory:');r.open(p,null);r.commit({type:'surface.set',surface:result},randomUUID(),'sculpt');r.historyMove(false,randomUUID(),'undo');expect(r.snapshot()!.surface).toEqual(base);r.db.close();expect(()=>sculptSurface(base,{center,radiusMm:20,delta:{xMm:1000,yMm:0,zMm:0},mode:'move',strength:1})).toThrow('TEMPLATE_INVERSION');});

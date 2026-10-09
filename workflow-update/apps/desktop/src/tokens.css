@@ -1,0 +1,10 @@
+/* Workspace palette: navy structure, blue actions, aqua selection, coral emphasis. */
+:root {
+ color-scheme:light;
+ --studio-deep:#1f385b;--studio-teal:#246b73;--studio-sky:#a7d7db;--studio-lilac:#e8edf4;--studio-white:#ffffff;
+ --studio-navy:#1f385b;--studio-cream:#f2faef;--studio-yellow:#f7edce;--studio-orange:#b57739;--studio-coral:#e73346;
+ --bg:#eef3f6;--panel:#ffffff;--panel-soft:#f6f9fb;--panel-blue:#eaf1f7;--canvas:#e8eef2;--model-canvas:#e8eef2;
+ --text:#203750;--text-muted:#52667a;--ink:#1f385b;--border:#c4d1dc;--accent:#315f7b;--accent-soft:#e1f1f1;
+ --selected:#dceff0;--primary:#315f7b;--primary-hover:#1f385b;--warning:#825315;--warning-soft:#fff4d8;--danger:#b42638;--danger-soft:#fff0f2;
+ --shadow-color:#1f385b;--on-shell:#f5fafc;--on-shell-muted:#d6e6f0;--radius-control:6px;--radius-panel:8px;--studio-ease:ease;--studio-motion:120ms;
+}

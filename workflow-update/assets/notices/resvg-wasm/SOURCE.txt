@@ -1,0 +1,5 @@
+@resvg/resvg-wasm 2.6.2, unmodified npm binary; MPL-2.0.
+Source: https://github.com/thx/resvg-js/tree/v2.6.2
+License retrieved from: https://cdn.jsdelivr.net/gh/thx/resvg-js@v2.6.2/LICENSE
+The npm integrity is pinned in package-lock.json.
+Full transitive binary/source attribution review remains a formal release task.

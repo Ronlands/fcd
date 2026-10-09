@@ -1,0 +1,14 @@
+{
+  "source": "https://www.npmjs.com/package/@fontsource/noto-sans-sc/v/5.3.0",
+  "package": "@fontsource/noto-sans-sc",
+  "version": "5.3.0",
+  "archiveSha512": "1dea889469b4fa884e2b164bb878f5a96eabe9abc71f439674a11101c483234450f8c5ebb5eb8b280f8cfb978e03cad8cb4305bce479013d1f428dab524c9ed1",
+  "sourceFontSha256": "dc20a86875ff056a6332c353bc9a82d199bb2e5aae1d444f912c1fbff783bfa5",
+  "outputSha256": "07bd2e6cafaa37c3bd1904f31147de50a9e3baedcb2927371334547018c331d8",
+  "license": "OFL-1.1",
+  "modifications": "WOFF decompressed to TrueType; renamed FurryPattern Sans SC; outlines unchanged",
+  "fonttoolsVersion": "4.65.0",
+  "glyphCount": 7946,
+  "npmIntegrity": "sha512-HeqIlGm0+ohOKxZLuHj1qW6r6avHH0OWdKERAcSDI0RQ+MXrteuLKA+M+5eOA8rYy0MFvOR5AT0fQo2rUkye0Q==",
+  "tarball": "https://registry.npmjs.org/@fontsource/noto-sans-sc/-/noto-sans-sc-5.3.0.tgz"
+}

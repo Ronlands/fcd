@@ -1,0 +1,6 @@
+import {referenceRunSchema,type Reference,type ReferenceRun} from '../../../packages/schema/index';
+import {referenceKey} from '../../../packages/reference/resources';
+import type {Mask} from '../../../packages/reference/mask';
+import {maskPieces} from './reference-segmentation';
+import {DomainError,hash} from './repository';
+export function manualCandidate(reference:Reference,sourceHash:string,mask:Mask,color:string):ReferenceRun{if(sourceHash!==hash(referenceKey(reference)))throw new DomainError('STALE_RESULT');if(!reference.calibration)throw new DomainError('CALIBRATION_REQUIRED');const factor=Math.min(1,512/Math.max(reference.width,reference.height));if((mask.width!==reference.width||mask.height!==reference.height)&&(mask.width!==Math.max(1,Math.round(reference.width*factor))||mask.height!==Math.max(1,Math.round(reference.height*factor))))throw new DomainError('INVALID_MASK');const result=maskPieces(mask,reference.calibration,reference.width,reference.height,color);result.pieces.forEach((p,i)=>p.name=(reference.view+': '+reference.name+' / '+(i+1)).slice(0,120));return referenceRunSchema.parse({referenceId:reference.id,sourceHash,piece:result.pieces[0],...result,mask,algorithm:'manual-mask-1',proxyWidth:mask.width,proxyHeight:mask.height,accepted:false});}
