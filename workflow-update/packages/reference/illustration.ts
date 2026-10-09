@@ -8,6 +8,7 @@ import {armFrameSupport} from './arm-frame-support';
 import {standingLimbSupport} from './standing-limb-support';
 import {recoverBluePigments} from './blue-pigments';
 import {terminalPawSupport} from './terminal-paw-support';
+import {refineImageEdgeOwnership} from './image-edge-evidence';
 export type PixelBox={minX:number;minY:number;maxX:number;maxY:number};
 export type IllustrationContext={part:BodyPart;side:BodySide;confidence:number};
 export type IllustrationRegion={part:BodyPart;side:BodySide;color:string;indices:number[];confidence:number;contexts?:IllustrationContext[]};
@@ -222,7 +223,12 @@ export function illustrationRegions(width:number,height:number,rgba:Uint8Array,e
  for(const part of bodyParts)for(const side of ['left','right'] as const){const ids=sided.get(part+':'+side);if(!ids?.length)continue;const mx=ids.reduce((s,i)=>s+i%width,0)/ids.length,my=ids.reduce((s,i)=>s+Math.floor(i/width),0)/ids.length;let xx=0,xy=0,yy=0;for(const i of ids){const x=i%width-mx,y=Math.floor(i/width)-my;xx+=x*x;xy+=x*y;yy+=y*y;}const spread=Math.hypot(xx-yy,2*xy)/(xx+yy||1),orientationRad=.5*Math.atan2(2*xy,xx-yy);let frameCorners:{x:number;y:number}[]|undefined;
   if(spread>.2&&(part==='arm'||part==='leg')){const c=Math.cos(orientationRad),s=Math.sin(orientationRad),pad=.5*(Math.abs(c)+Math.abs(s));let minU=Infinity,maxU=-Infinity,minV=Infinity,maxV=-Infinity;for(const i of ids){const x=i%width-mx,y=Math.floor(i/width)-my,u=c*x+s*y,v=-s*x+c*y;minU=Math.min(minU,u-pad);maxU=Math.max(maxU,u+pad);minV=Math.min(minV,v-pad);maxV=Math.max(maxV,v+pad);}frameCorners=[[minU,minV],[maxU,minV],[maxU,maxV],[minU,maxV]].map(([u,v])=>({x:mx+.5+c*u-s*v,y:my+.5+s*u+c*v}));}
   partBounds.push({part,side,...(spread>.2?{orientationRad}:{}),...(frameCorners?{frameCorners}:{}),...box(ids,width)});}
- return {regions,bounds,partBounds,foregroundPixels:occupied.length,discardedPixels,recoveredShadowPixels,recoveredBluePixels,anatomical,palette:[...new Set(regions.map(r=>r.color))]};
+ // Pigment classification identifies materials; the original RGB transition
+ // locates their shared boundary. Refine that single ownership partition
+ // before tracing, so both neighbours receive the same image-supported edge.
+ // Anatomical registration, silhouette, dark tips and region topology stay fixed.
+ const refined=refineImageEdgeOwnership(width,height,rgba,regions);
+ return {regions:refined.regions,bounds,partBounds,foregroundPixels:occupied.length,discardedPixels,recoveredShadowPixels,recoveredBluePixels,anatomical,palette:[...new Set(regions.map(r=>r.color))]};
 }
 
 

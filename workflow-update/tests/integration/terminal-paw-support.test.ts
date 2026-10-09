@@ -1,11 +1,10 @@
-import {it,expect} from 'vitest';
+import {it,expect,vi} from 'vitest';
 import sharp from 'sharp';
-import {illustrationRegions} from '../../packages/reference/illustration';
+import {illustrationRegions,pigmentFamily} from '../../packages/reference/illustration';
 import {terminalPawSupport} from '../../packages/reference/terminal-paw-support';
-import {createHash,randomUUID} from 'node:crypto';
+import * as pawSupport from '../../packages/reference/terminal-paw-support';
+import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import {splitReferences} from '../../apps/desktop/main/automatic-reference';
-import type {Reference} from '../../packages/schema/index';
 const baseline=JSON.parse(readFileSync(new URL('../fixtures/terminal-paw-baseline.json',import.meta.url),'utf8')),sha=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 
 it.each([['front',609,666,390,435,410,451,378,455],['back',0,609,560,265,586,244,600,269]] as const)('recovers the actual %s missing neutral hand and separate claws without swallowing its cuff',async(view,left,width,x,y,cx,cy,dx,dy)=>{
@@ -35,7 +34,28 @@ it.each([['head',-70,-65],['tail',0,145]] as const)('rejects a neutral and two-t
  const input=supportedHand(),regions=input.regions.map(r=>({...r,indices:r.indices.map(i=>i+dy*input.width+dx)})),saturation=new Float32Array(input.saturation.length),value=new Float32Array(input.value.length);input.regions.forEach((r,j)=>r.indices.forEach((i,k)=>{const target=regions[j].indices[k];saturation[target]=input.saturation[i];value[target]=input.value[i];}));expect(terminalPawSupport({...input,regions,saturation,value})).toEqual([]);
 });
 
-it.each([['jpeg','character-front-back.jpg',[['front',609,666],['back',0,609]],750],['blueWhite','character-blue-white-front-back.png',[['front',0,803],['back',803,733]],1024]] as const)('%s hand metadata repair leaves every original material owner and saved contour byte-for-byte unchanged',async(name,file,crops,height)=>{
- const refs:Reference[]=[];for(const[view,left,width]of crops){const png=await sharp('tests/fixtures/'+file).extract({left,top:0,width,height}).png().toBuffer(),rgba=new Uint8Array(await sharp(png).ensureAlpha().raw().toBuffer()),r=illustrationRegions(width,height,rgba);expect(sha(r.regions.map(p=>({color:p.color,indices:p.indices})))).toBe(baseline[name][view].pixels);if(name==='blueWhite'){expect(sha(r.regions.map(({indices,...p})=>p))).toBe(baseline[name][view].metadata);expect(sha(r.partBounds)).toBe(baseline[name][view].partBounds);}refs.push({id:randomUUID(),name:view,view,width,height,png:'data:image/png;base64,'+png.toString('base64'),resources:{} as Reference['resources']});}
- const r=splitReferences(refs,1800,6,true);expect(sha(r.regions.map(({piece:p})=>({nodes:p.nodes.map(n=>[n.xMm,n.yMm]),holes:p.holes?.map(h=>h.map(n=>[n.xMm,n.yMm])),curves:p.curves?.map(c=>({start:p.nodes.findIndex(n=>n.id===c.startNodeId),end:p.nodes.findIndex(n=>n.id===c.endNodeId),c1:[c.c1.xMm,c.c1.yMm],c2:[c.c2.xMm,c.c2.yMm]}))})))).toBe(baseline[name].geometry);
-},120000);
+// The original geometry/pixel hashes coupled this metadata-only repair to the
+// contour algorithm. Keep the unchanged blue-white metadata/frame contract,
+// and test nonmutation at the actual helper seam before image-edge recovery.
+it.each([['jpeg','character-front-back.jpg',[['front',609,666],['back',0,609]],750],['blueWhite','character-blue-white-front-back.png',[['front',0,803],['back',803,733]],1024]] as const)('%s terminal-hand metadata evidence never mutates real material inputs',async(name,file,crops,height)=>{
+ const original=terminalPawSupport;let calls=0;
+ const spy=vi.spyOn(pawSupport,'terminalPawSupport').mockImplementation(input=>{
+  calls++;const regions=sha(input.regions),arms=sha([...input.arms]),existing=[...input.existing],saturation=input.saturation.slice(),value=input.value.slice(),head={...input.head};
+  const result=original(input);
+  expect(sha(input.regions)).toBe(regions);expect(sha([...input.arms])).toBe(arms);expect([...input.existing]).toEqual(existing);expect(input.head).toEqual(head);
+  expect(Buffer.from(input.saturation.buffer,input.saturation.byteOffset,input.saturation.byteLength).equals(Buffer.from(saturation.buffer))).toBe(true);
+  expect(Buffer.from(input.value.buffer,input.value.byteOffset,input.value.byteLength).equals(Buffer.from(value.buffer))).toBe(true);
+  for(const hand of result){expect(new Set(hand.regionIndices).size).toBe(hand.regionIndices.length);expect(hand.regionIndices.length).toBeGreaterThanOrEqual(3);for(const i of hand.regionIndices){expect(i).toBeGreaterThanOrEqual(0);expect(i).toBeLessThan(input.regions.length);expect(input.regions[i].side).toBe(hand.side);expect(['arm','paw']).toContain(input.regions[i].part);}}
+  return result;
+ });
+ try{for(const[view,left,width]of crops){
+  const rgba=new Uint8Array(await sharp('tests/fixtures/'+file).extract({left,top:0,width,height}).ensureAlpha().raw().toBuffer()),imageBefore=rgba.slice(),r=illustrationRegions(width,height,rgba);
+  expect(Buffer.from(rgba).equals(Buffer.from(imageBefore))).toBe(true);
+  const all=r.regions.flatMap(p=>p.indices);expect(new Set(all).size).toBe(all.length);expect(all.length).toBe(r.foregroundPixels-r.discardedPixels);
+  // Source-supported dark claws remain separate regions. The metadata helper
+  // cannot consume their pixels or borrow the adjacent colored cuff.
+  const dark=r.regions.filter(p=>pigmentFamily(p.color)===6);expect(dark.length).toBeGreaterThan(2);expect(dark.some(p=>p.part==='paw'||p.part==='foot')).toBe(true);
+  if(name==='blueWhite'){expect(sha(r.regions.map(({indices,...p})=>p))).toBe(baseline[name][view].metadata);expect(sha(r.partBounds)).toBe(baseline[name][view].partBounds);}
+ }}finally{spy.mockRestore();}
+ if(name==='jpeg')expect(calls).toBe(2);
+},30000);

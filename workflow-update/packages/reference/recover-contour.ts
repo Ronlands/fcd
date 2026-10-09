@@ -81,7 +81,11 @@ function corners(points: Point[], pixel: number) {
             continue;
         }
         const turns = [4, 8, 12].map(scale => { const a = at(i, -1, pixel * scale), p = points[i], b = at(i, 1, pixel * scale), ux = p.xMm - a.xMm, uy = p.yMm - a.yMm, vx = b.xMm - p.xMm, vy = b.yMm - p.yMm; return Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy); });
-        if (turns.every(t => Math.sign(t) === Math.sign(turns[0])) && Math.min(...turns.map(Math.abs)) > .35 && Math.abs(turns[1]) > .7)
+        // A corner has comparable turning at short and longer reaches. On a
+        // painted arc the turn grows with reach; marking it fixed splits that
+        // real curvature into polygon bends before data fitting can recover it.
+        const magnitudes = turns.map(Math.abs), stable = magnitudes[0] >= Math.max(...magnitudes.slice(1)) * .8;
+        if (stable && turns.every(t => Math.sign(t) === Math.sign(turns[0])) && Math.min(...magnitudes) > .35 && Math.abs(turns[1]) > .7)
             candidates.push({ i, strength: Math.abs(turns[1]) });
     }
     const selected: number[] = [];
@@ -120,27 +124,56 @@ function spanError(a: Point[], b: Point[], pixel: number, spacing = pixel * .2) 
     }
     return maximum;
 }
-function geometricCubic(span:Point[],g:Grid,createId:()=>string):Curve|undefined {
- if(span.length<5)return;
- const a=span[0],b=span.at(-1)!,d=length(a,b);if(d<g.size*4)return;
- const arc=[0];for(let i=1;i<span.length;i++)arc.push(arc.at(-1)!+length(span[i-1],span[i]));
- const core=span.filter((_,i)=>arc[i]>g.size*2&&arc.at(-1)!-arc[i]>g.size*2);if(core.length>=3&&straight(core,g))return;
- const ts=arc.map(t=>t/arc.at(-1)!);
- for(let iteration=0;iteration<12;iteration++){
-  let aa=0,ab=0,bb=0,ax=0,bx=0,ay=0,by=0;
-  for(let i=1;i+1<span.length;i++){const t=ts[i],s=1-t,b0=s*s*s,b1=3*t*s*s,b2=3*t*t*s,b3=t*t*t,rx=span[i].xMm-b0*a.xMm-b3*b.xMm,ry=span[i].yMm-b0*a.yMm-b3*b.yMm;aa+=b1*b1;ab+=b1*b2;bb+=b2*b2;ax+=b1*rx;bx+=b2*rx;ay+=b1*ry;by+=b2*ry;}
-  const det=aa*bb-ab*ab;if(det<=1e-12)return;
-  const c1={id:createId(),xMm:(ax*bb-bx*ab)/det,yMm:(ay*bb-by*ab)/det},c2={id:createId(),xMm:(bx*aa-ax*ab)/det,yMm:(by*aa-ay*ab)/det};
-  if(length(a,c1)>d*1.5||length(b,c2)>d*1.5)return;
-  const c={id:createId(),startNodeId:a.id,endNodeId:b.id,c1,c2};
-  try{const sampled=flatten(a,c1,c2,b,g.size*.01,createId);if(Math.max(spanError(span,sampled,g.size,g.size*.1),spanError(sampled,span,g.size,g.size*.1))+g.size*.06<=g.size*1.05)return c;}catch{return;}
-  const p=[a,c1,c2,b],next=[...ts];for(let j=1;j+1<span.length;j++){const t=ts[j],s=1-t,B=[s*s*s,3*t*s*s,3*t*t*s,t*t*t],D=[-3*s*s,3*s*s-6*s*t,6*s*t-3*t*t,3*t*t],DD=[6*s,-12*s+6*t,6*s-12*t,6*t],x=p.reduce((v,p,k)=>v+B[k]*p.xMm,0)-span[j].xMm,y=p.reduce((v,p,k)=>v+B[k]*p.yMm,0)-span[j].yMm,dx=p.reduce((v,p,k)=>v+D[k]*p.xMm,0),dy=p.reduce((v,p,k)=>v+D[k]*p.yMm,0),ddx=p.reduce((v,p,k)=>v+DD[k]*p.xMm,0),ddy=p.reduce((v,p,k)=>v+DD[k]*p.yMm,0),den=dx*dx+dy*dy+x*ddx+y*ddy;if(Math.abs(den)>1e-12)next[j]=Math.max((ts[j-1]+t)/2,Math.min((t+ts[j+1])/2,t-(x*dx+y*dy)/den));}ts.splice(0,ts.length,...next);
- }
+/** Recover controls directly from source coordinates. Raster chord tangents
+ * can constrain a genuine arc to the wrong direction; independent least
+ * squares controls avoid that bias. Endpoints remain exact, and no continuity,
+ * curvature energy or aesthetic smoothness term enters this fit. */
+function geometricCubic(span: Point[], g: Grid, createId: () => string): Curve | undefined {
+    if (span.length < 5) return;
+    const a = span[0], b = span.at(-1)!, d = length(a, b);
+    if (d < g.size * 4) return;
+    const arc = [0];
+    for (let i = 1; i < span.length; i++) arc.push(arc.at(-1)! + length(span[i - 1], span[i]));
+    const core = span.filter((_, i) => arc[i] > g.size * 2 && arc.at(-1)! - arc[i] > g.size * 2);
+    if (core.length >= 3 && straight(core, g)) return;
+    const parameters = arc.map(t => t / arc.at(-1)!);
+    for (let iteration = 0; iteration < 12; iteration++) {
+        let aa = 0, ab = 0, bb = 0, ax = 0, bx = 0, ay = 0, by = 0;
+        for (let i = 1; i + 1 < span.length; i++) {
+            const t = parameters[i], s = 1 - t, b0 = s * s * s, b1 = 3 * t * s * s, b2 = 3 * t * t * s, b3 = t * t * t;
+            const rx = span[i].xMm - b0 * a.xMm - b3 * b.xMm, ry = span[i].yMm - b0 * a.yMm - b3 * b.yMm;
+            aa += b1 * b1; ab += b1 * b2; bb += b2 * b2;
+            ax += b1 * rx; bx += b2 * rx; ay += b1 * ry; by += b2 * ry;
+        }
+        const det = aa * bb - ab * ab;
+        if (det <= 1e-12) return;
+        const c1 = { id: createId(), xMm: (ax * bb - bx * ab) / det, yMm: (ay * bb - by * ab) / det };
+        const c2 = { id: createId(), xMm: (bx * aa - ax * ab) / det, yMm: (by * aa - ay * ab) / det };
+        if (length(a, c1) > d * 1.5 || length(b, c2) > d * 1.5) return;
+        const c: Curve = { id: createId(), startNodeId: a.id, endNodeId: b.id, c1, c2 };
+        try {
+            const sampled = flatten(a, c1, c2, b, g.size * .01, createId);
+            // .1-pixel sampling contributes .05; flattening contributes .01.
+            if (Math.max(spanError(span, sampled, g.size, g.size * .1), spanError(sampled, span, g.size, g.size * .1)) + g.size * .06 <= g.size * 1.05) return c;
+        } catch { return; }
+        const p = [a, c1, c2, b], next = [...parameters];
+        for (let j = 1; j + 1 < span.length; j++) {
+            const t = parameters[j], s = 1 - t, B = [s * s * s, 3 * t * s * s, 3 * t * t * s, t * t * t];
+            const D = [-3 * s * s, 3 * s * s - 6 * s * t, 6 * s * t - 3 * t * t, 3 * t * t], DD = [6 * s, -12 * s + 6 * t, 6 * s - 12 * t, 6 * t];
+            const x = p.reduce((v, p, k) => v + B[k] * p.xMm, 0) - span[j].xMm, y = p.reduce((v, p, k) => v + B[k] * p.yMm, 0) - span[j].yMm;
+            const dx = p.reduce((v, p, k) => v + D[k] * p.xMm, 0), dy = p.reduce((v, p, k) => v + D[k] * p.yMm, 0);
+            const ddx = p.reduce((v, p, k) => v + DD[k] * p.xMm, 0), ddy = p.reduce((v, p, k) => v + DD[k] * p.yMm, 0), den = dx * dx + dy * dy + x * ddx + y * ddy;
+            if (Math.abs(den) > 1e-12) next[j] = Math.max((parameters[j - 1] + t) / 2, Math.min((t + parameters[j + 1]) / 2, t - (x * dx + y * dy) / den));
+        }
+        parameters.splice(0, parameters.length, ...next);
+    }
 }
 
 function ring(points: Point[], pixel: number, createId: () => string, allowCurves: boolean, boundaryCorner = false, retainCorners = false, forced:ReadonlySet<string>=new Set()) {
     const g = grid(points, pixel), { fixed, at } = corners(points, g.size), lookup = new Map(points.map((p, i) => [p.id, i])), anchors = new Set<number>();
     for(const id of forced)fixed.add(id);
+    // Use the inferred raster axis so rotating calibration cannot introduce
+    // different split anchors along an otherwise identical digital boundary.
     let left = 0, right = 0;
     for (let i = 0; i < points.length; i++) {
         if (points[i].xMm * g.ux + points[i].yMm * g.uy < points[left].xMm * g.ux + points[left].yMm * g.uy)
@@ -213,7 +246,7 @@ function ring(points: Point[], pixel: number, createId: () => string, allowCurve
             return;
         }
         if (depth < 20) {
-            const c = allowCurves ? geometricCubic(span, g, createId) ?? cubic(span) : undefined;
+            const c = allowCurves ? cubic(span) ?? geometricCubic(span, g, createId) : undefined;
             if (c) {
                 segments.push({ a, b, curve: c });
                 return;
@@ -316,6 +349,21 @@ function ring(points: Point[], pixel: number, createId: () => string, allowCurve
             }
         }
     }
+        if (allowCurves) {
+        for (let i = 0; i < segments.length; i++) {
+            for (let j = Math.min(segments.length - 1, i + 8); j > i; j--) {
+                if (segments.slice(i + 1, j + 1).some(s => fixed.has(s.a.id) || forced.has(s.a.id) || bevel(s.a))) continue;
+                const start = lookup.get(segments[i].a.id)!, end = lookup.get(segments[j].b.id)!;
+                const span = end > start ? points.slice(start, end + 1) : [...points.slice(start), ...points.slice(0, end + 1)];
+                if (straight(span, g)) continue;
+                const c = cubic(span) ?? geometricCubic(span, g, createId);
+                if (!c) continue;
+                segments.splice(i, j - i + 1, {a:segments[i].a,b:segments[j].b,curve:c});
+                break;
+            }
+        }
+    }
+
     let nodes = place();
     for (let pass = 0; pass < 12; pass++) {
         let changed = false;
@@ -486,12 +534,23 @@ export function recoverBoundaryChain(points:Point[],pixelMm:number,createId:()=>
  if(points.length<3)return {nodes:points,curves:[] as Curve[]};
  const origin=points[0],local=points.map(p=>({...p,xMm:p.xMm-origin.xMm,yMm:p.yMm-origin.yMm})),a=local[0],b=local.at(-1)!,d=length(a,b),reach=Math.max(pixelMm*20,...local.map(p=>length(a,p)))*3;
  if(d<1e-12)return {nodes:points,curves:[] as Curve[]};
+ const native=grid(local,pixelMm),support=straight(local,native);
+ // A digital straight strip can have clipped raster junctions off its
+ // supporting line. Keep those junctions exact, recover the measured interior
+ // direction, and confine the connecting caps to four native pixels.
+ if(support&&d>native.size*12&&!local.some((p,i)=>i>0&&length(p,local[i-1])<Math.min(.04,native.size*.1))){
+  let first=1,last=local.length-2;
+  while(first<last&&length(a,local[first])<native.size*4)first++;
+  while(last>first&&length(b,local[last])<native.size*4)last--;
+  const project=(p:Point)=>{const t=(support.offset-support.nx*p.xMm-support.ny*p.yMm)/(support.nx**2+support.ny**2);return {...p,id:createId(),xMm:p.xMm+support.nx*t,yMm:p.yMm+support.ny*t};},nodes=[a,project(local[first]),project(local[last]),b];
+  if(Math.max(spanError(local,nodes,native.size,native.size*.1),spanError(nodes,local,native.size,native.size*.1))+native.size*.05<=native.size*1.05)return{nodes:nodes.map(p=>({...p,xMm:p.xMm+origin.xMm,yMm:p.yMm+origin.yMm})),curves:[] as Curve[]};
+ }
  const nx=-(b.yMm-a.yMm)/d,ny=(b.xMm-a.xMm)/d,q={id:createId(),xMm:b.xMm+nx*reach,yMm:b.yMm+ny*reach},r={id:createId(),xMm:a.xMm+nx*reach,yMm:a.yMm+ny*reach},scaffold=[...local,q,r],forced=new Set([a.id,b.id,q.id,r.id]);
  for(const allowCurves of[true,false]){
   const fit=ring(scaffold,pixelMm,createId,allowCurves,false,false,forced),start=fit.nodes.findIndex(p=>p.id===a.id),end=fit.nodes.findIndex(p=>p.id===b.id);
   if(start<0||end<start)continue;
   const nodes=fit.nodes.slice(start,end+1),ids=new Set(nodes.map(n=>n.id)),curves=fit.curves.filter(c=>ids.has(c.startNodeId)&&ids.has(c.endNodeId)),byStart=new Map(curves.map(c=>[c.startNodeId,c])),sampled=nodes.flatMap((n,i)=>{const c=byStart.get(n.id);return c?flatten(n,c.c1,c.c2,nodes[i+1],pixelMm/.8*.01,createId).slice(0,-1):[n];}),g=fit.g.size;
-  // spanError samples at .2 pixels, hence a .1-pixel Lipschitz margin.
+  // Refine sampling to .1 pixels, hence a .05-pixel Lipschitz margin.
   // Only a cubic needs the additional .01-pixel flattening margin; charging
   // that to an exact line needlessly rejects shallow digital straight spans.
   if(Math.max(spanError(local,sampled,g,g*.1),spanError(sampled,local,g,g*.1))+g*(.05+(curves.length?.01:0))>g*1.05)continue;

@@ -39,7 +39,10 @@ export function recoverSharedContours(originals:Piece[],pixelMm:number,createId:
   // A closed contact loop has a real junction, unlike an isolated island.
   // Retain its raster anchors; moving it would detach the neighbouring chain.
   const fitted=closed?anchors.length?recoverBoundaryLoop(raw,pixelMm,createId,new Set(raw.filter(p=>anchors.includes(key(p))).map(p=>p.id))):recoverContour({...originals[[...owners][0]],nodes:raw,holes:[],curves:[]},pixelMm,createId):recoverBoundaryChain(raw,pixelMm,createId);
-  let nodes=fitted.nodes,curves=fitted.curves??[];if(hole){nodes=contourPolyline(nodes,curves,closed,g*.01,createId);curves=[];}
+  // Polygon-only holes and their other owner share these exact samples. The
+  // finer curve fit need not turn flattening samples into excessive editable
+  // nodes; the assembled polygon still passes the full 1.05-pixel bound below.
+  let nodes=fitted.nodes,curves=fitted.curves??[];if(hole){nodes=contourPolyline(nodes,curves,closed,g*.06,createId);curves=[];}
   chains.push({raw,closed,anchors,edges:edgeIds,owners,hole,nodes,curves,restored:false});
  }
  const reverse=(c:Chain)=>({nodes:[...c.nodes].reverse(),curves:c.curves.map(v=>({...v,startNodeId:v.endNodeId,endNodeId:v.startNodeId,c1:v.c2,c2:v.c1}))});
