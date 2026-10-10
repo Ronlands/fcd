@@ -7,6 +7,7 @@ import {resolve} from 'node:path';
 import {clip} from '../../apps/desktop/main/markings';
 import {edgeArcPoints} from '../../packages/pattern/edit';
 import {recoverSharedContours} from '../../packages/reference/shared-contour';
+import {pigmentFamily} from '../../packages/reference/illustration';
 import type {Piece,Point,Reference} from '../../packages/schema/index';
 
 // Independent observations on the user's exact original JPEG. These open
@@ -32,7 +33,10 @@ function importOriginal(){return importedPromise??=(async()=>{
  return splitReferences(refs,750,12,true).regions.filter(p=>p.view==='front').map(p=>p.piece);
 })();}
 it.each(rois)('original JPEG $name has no artificial sharp heading changes',async roi=>{
- const imported=await importOriginal(),candidates=imported.filter(p=>p.color===roi.color&&sample(p).some(n=>n.xMm+609>=roi.minX&&n.xMm+609<=roi.maxX&&750-n.yMm>=roi.minY&&750-n.yMm<=roi.maxY));
+ // The representative palette can move by one RGB level when an unrelated
+ // misclassified patch is corrected. Locate the material by family and the
+ // independently observed image interval, rather than its old exact hex.
+ const imported=await importOriginal(),candidates=imported.filter(p=>pigmentFamily(p.color)===pigmentFamily(roi.color)&&sample(p).some(n=>n.xMm+609>=roi.minX&&n.xMm+609<=roi.maxX&&750-n.yMm>=roi.minY&&750-n.yMm<=roi.maxY));
  expect(candidates.length).toBeGreaterThan(0);
  const turns=candidates.flatMap(p=>p.nodes.filter(n=>n.xMm+609>=roi.minX&&n.xMm+609<=roi.maxX&&750-n.yMm>=roi.minY&&750-n.yMm<=roi.maxY).map(n=>({x:n.xMm+609,y:750-n.yMm,turn:tangentTurn(p,n.id)})));
  // 20 degrees is a geometric discontinuity bound at an observed broad bend,

@@ -10,7 +10,12 @@ it.each([['front',0,803,[[332,603],[521,603]],[[320,655],[525,655]],[648,804]],[
 });
 it.each([['front',609,666],['back',0,609]] as const)('preserves original JPEG blue illumination and thin dark ink without inventing navy fabric (%s)',async(_view,left,width)=>{
  const rgba=await sharp('tests/fixtures/character-front-back.jpg').extract({left,top:0,width,height:750}).ensureAlpha().raw().toBuffer(),r=illustrationRegions(width,750,rgba);expect(r.regions.filter(a=>pigmentFamily(a.color)===4&&brightness(a.color)<.55)).toHaveLength(0);
- expect(r.regions).toHaveLength(left===609?56:46);
+ // Removing an unsupported pink division legitimately changes the whole-image
+ // instance count. Original blue interiors and complete foreground ownership
+ // independently constrain this test's illumination/material contract.
+ const probes=left===609?[[90,510],[110,480]]:[[300,500],[305,300]];
+ for(const[x,y]of probes){const i=(y*width+x)*4;expect(rgba[i+2]-rgba[i]).toBeGreaterThan(100);expect(rgba[i+1]-rgba[i]).toBeGreaterThan(80);const source=r.regions.find(p=>p.indices.includes(y*width+x))!;expect(source).toBeDefined();expect(pigmentFamily(source.color)).toBe(4);expect(brightness(source.color)).toBeGreaterThan(.7);}
+ const all=r.regions.flatMap(p=>p.indices);expect(new Set(all).size).toBe(all.length);expect(all.length).toBe(r.foregroundPixels-r.discardedPixels);
 });
 
 function blueField(){const width=180,height=120,foreground=new Uint8Array(width*height).fill(1),labels=new Int8Array(width*height).fill(4),saturation=new Float32Array(width*height).fill(.55),value=new Float32Array(width*height).fill(.9);return {width,height,foreground,labels,saturation,value};}

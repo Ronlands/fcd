@@ -9,6 +9,7 @@ import {standingLimbSupport} from './standing-limb-support';
 import {recoverBluePigments} from './blue-pigments';
 import {terminalPawSupport} from './terminal-paw-support';
 import {refineImageEdgeOwnership} from './image-edge-evidence';
+import {refineWarmMaterialLabels} from './image-warm-materials';
 export type PixelBox={minX:number;minY:number;maxX:number;maxY:number};
 export type IllustrationContext={part:BodyPart;side:BodySide;confidence:number};
 export type IllustrationRegion={part:BodyPart;side:BodySide;color:string;indices:number[];confidence:number;contexts?:IllustrationContext[]};
@@ -69,6 +70,9 @@ export function illustrationRegions(width:number,height:number,rgba:Uint8Array,e
  // Yellow recovery changes component membership. Revalidate the remaining
  // warm fringes using current evidence, before palette and instance tracing.
  suppressUnsupportedWarmShadows(width,height,foreground,labels,saturation,value);
+ // Correct unsupported material membership before constructing instances;
+ // a later curve fit cannot repair a grey shadow assigned to a pink pad.
+ labels=refineWarmMaterialLabels(width,height,rgba,foreground,labels,saturation,value).labels;
  // A thin two-sided darkness valley is an ink edge even when JPEG makes it
  // lighter than black. Restrict this softer evidence to paw/foot regions;
  // inner-ear creases and head shading do not create new fabric instances.
@@ -226,9 +230,11 @@ export function illustrationRegions(width:number,height:number,rgba:Uint8Array,e
  // Pigment classification identifies materials; the original RGB transition
  // locates their shared boundary. Refine that single ownership partition
  // before tracing, so both neighbours receive the same image-supported edge.
- // Anatomical registration, silhouette, dark tips and region topology stay fixed.
+ // Anatomical registration and region topology stay fixed. Image-supported
+ // silhouette corrections can remove pale background from dark antialiased tips.
  const refined=refineImageEdgeOwnership(width,height,rgba,regions);
- return {regions:refined.regions,bounds,partBounds,foregroundPixels:occupied.length,discardedPixels,recoveredShadowPixels,recoveredBluePixels,anatomical,palette:[...new Set(regions.map(r=>r.color))]};
+ const foregroundPixels=occupied.length-refined.report.removedForegroundPixels;
+ return {regions:refined.regions,bounds,partBounds,foregroundPixels,discardedPixels,recoveredShadowPixels,recoveredBluePixels,anatomical,palette:[...new Set(regions.map(r=>r.color))]};
 }
 
 

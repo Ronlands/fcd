@@ -163,7 +163,7 @@ pub(crate) fn flatten(
     flatten(&m, &t, &r, b, out, depth + 1)
 }
 pub fn contours(piece: &Piece) -> Result<(Vec<Point>, Vec<Vec<Point>>), &'static str> {
-    validate(&piece.nodes)?;
+    crate::validate_control_nodes(&piece.nodes)?;
     let curves = piece.curves.as_deref().unwrap_or(&[]);
     if curves.len() > piece.nodes.len() {
         return Err("invalidCurve");

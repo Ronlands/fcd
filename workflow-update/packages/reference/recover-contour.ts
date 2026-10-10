@@ -1,5 +1,6 @@
 import type { Piece, Point } from '../schema/index';
 import { safeContour, contourBoundaryError } from './contour-topology';
+import {boxIndex,type Box} from '../surface/spatial';
 type Curve = NonNullable<Piece['curves']>[number];
 type Segment = {
     a: Point;
@@ -15,8 +16,11 @@ const distance = (p: Point, a: Point, b: Point) => { const x = b.xMm - a.xMm, y 
 const length = (a: Point, b: Point) => Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm);
 const area = (r: Point[]) => r.reduce((s, a, i) => { const b = r[(i + 1) % r.length], o = r[0]; return s + (a.xMm - o.xMm) * (b.yMm - o.yMm) - (b.xMm - o.xMm) * (a.yMm - o.yMm); }, 0) / 2;
 function grid(points: Point[], pixel: number) {
-    const candidates = points.map((p, i) => { const q = points[(i + 1) % points.length], d = length(p, q); return { x: q.xMm - p.xMm, y: q.yMm - p.yMm, d }; }).filter(e => e.d > pixel * .5 && e.d < pixel * 2).sort((a, b) => a.d - b.d);
-    const e = candidates[Math.floor(candidates.length * .1)];
+    const candidates = points.map((p, i) => { const q = points[(i + 1) % points.length], d = length(p, q); return { x: q.xMm - p.xMm, y: q.yMm - p.yMm, d }; }).filter(e => e.d > pixel * .5 && e.d < pixel * 2);
+    const measured = [...candidates].sort((a, b) => a.d - b.d)[Math.floor(candidates.length * .1)]?.d;
+    // Unit raster edges tie geometrically. Resolve those ties by original
+    // traversal order, so scale/rotation roundoff cannot flip the chosen axis.
+    const e = candidates.find(e => measured !== undefined && Math.abs(e.d - measured) <= pixel * 1e-6);
     return e ? { size: e.d, ux: e.x / e.d, uy: e.y / e.d } : { size: pixel / .8, ux: 1, uy: 0 };
 }
 type Grid = ReturnType<typeof grid>;
@@ -74,7 +78,23 @@ function corners(points: Point[], pixel: number) {
     const candidates: {
         i: number;
         strength: number;
+        keep: boolean;
     }[] = [];
+    const native = grid(points, pixel * .8);
+    const supportingSpan = (index: number, direction: number) => {
+        const span = [points[index]];
+        let remaining = Math.min(pixel * 20, perimeter * .15);
+        for (let k = 0; k < points.length; k++) {
+            const next = (index + direction + points.length) % points.length, p = points[index], q = points[next], d = length(p, q);
+            if (d >= remaining) {
+                const t = remaining / d;
+                span.push({ id: '', xMm: p.xMm + (q.xMm - p.xMm) * t, yMm: p.yMm + (q.yMm - p.yMm) * t });
+                break;
+            }
+            span.push(q); remaining -= d; index = next;
+        }
+        return direction < 0 ? span.reverse() : span;
+    };
     for (let i = 0; i < points.length; i++) {
         if (Math.min(length(points[i], points[(i + points.length - 1) % points.length]), length(points[i], points[(i + 1) % points.length])) < Math.min(.04, pixel * .1)) {
             fixed.add(points[i].id);
@@ -84,16 +104,22 @@ function corners(points: Point[], pixel: number) {
         // A corner has comparable turning at short and longer reaches. On a
         // painted arc the turn grows with reach; marking it fixed splits that
         // real curvature into polygon bends before data fitting can recover it.
-        const magnitudes = turns.map(Math.abs), stable = magnitudes[0] >= Math.max(...magnitudes.slice(1)) * .8;
-        if (stable && turns.every(t => Math.sign(t) === Math.sign(turns[0])) && Math.min(...magnitudes) > .35 && Math.abs(turns[1]) > .7)
-            candidates.push({ i, strength: Math.abs(turns[1]) });
+        const magnitudes = turns.map(Math.abs), cappedTip = magnitudes[0] >= Math.PI * .45 && Math.min(...magnitudes.slice(1)) >= Math.PI * .65;
+        // A few terminal pixel cells can bevel a genuinely acute tip. Its
+        // short reach still turns sharply and both longer reaches confirm
+        // the acute arms; do not confuse that cap with a broad painted arc.
+        const stable = magnitudes[0] >= Math.max(...magnitudes.slice(1)) * .8 || magnitudes[0] >= Math.PI * .6 || cappedTip;
+        const eligible = turns.every(t => Math.sign(t) === Math.sign(turns[0])) && Math.min(...magnitudes) > .35 && Math.abs(turns[1]) > .7;
+        const supportedIntersection = eligible && !stable && straight(supportingSpan(i, -1), native) && straight(supportingSpan(i, 1), native);
+        if (eligible)
+            candidates.push({ i, strength: Math.abs(turns[1]), keep: !!(stable || supportedIntersection) });
     }
     const selected: number[] = [];
-    for (const { i } of candidates.sort((a, b) => b.strength - a.strength || a.i - b.i)) {
+    for (const { i, keep } of candidates.sort((a, b) => b.strength - a.strength || a.i - b.i)) {
         if (selected.some(j => { const arc = Math.abs(position[i] - position[j]); return Math.min(arc, perimeter - arc) < pixel * 3; }))
             continue;
         selected.push(i);
-        fixed.add(points[i].id);
+        if (keep) fixed.add(points[i].id);
     }
     return { fixed, at };
 }
@@ -110,13 +136,21 @@ function flatten(a: Point, c1: Point, c2: Point, b: Point, tolerance: number, cr
 }
 function spanError(a: Point[], b: Point[], pixel: number, spacing = pixel * .2) {
     let maximum = 0;
+    // Only distances within the acceptance radius can affect a successful
+    // fit. Index longer flattened arcs rather than scanning every edge for
+    // every raster sample; short chords retain the cheaper direct path.
+    const boxes: Box[] | undefined = b.length > 16 ? b.slice(0, -1).map((p, i) => [Math.min(p.xMm, b[i + 1].xMm), Math.min(p.yMm, b[i + 1].yMm), Math.max(p.xMm, b[i + 1].xMm), Math.max(p.yMm, b[i + 1].yMm)]) : undefined;
+    const index = boxes ? boxIndex(boxes) : undefined, radius = pixel * 1.05;
     for (let i = 0; i + 1 < a.length; i++) {
         const p = a[i], q = a[i + 1], count = Math.max(1, Math.ceil(length(p, q) / spacing));
         for (let j = 0; j <= count; j++) {
             const t = j / count, r = { id: '', xMm: p.xMm + (q.xMm - p.xMm) * t, yMm: p.yMm + (q.yMm - p.yMm) * t };
             let nearest = Infinity;
-            for (let k = 0; k + 1 < b.length; k++)
-                nearest = Math.min(nearest, distance(r, b[k], b[k + 1]));
+            if (index) {
+                for (const k of index.query([r.xMm - radius, r.yMm - radius, r.xMm + radius, r.yMm + radius])) nearest = Math.min(nearest, distance(r, b[k], b[k + 1]));
+            } else {
+                for (let k = 0; k + 1 < b.length; k++) nearest = Math.min(nearest, distance(r, b[k], b[k + 1]));
+            }
             maximum = Math.max(maximum, nearest);
             if (maximum > pixel * 1.05)
                 return maximum;
@@ -124,18 +158,38 @@ function spanError(a: Point[], b: Point[], pixel: number, spacing = pixel * .2) 
     }
     return maximum;
 }
+/** A short measured span cannot acquire a backwards tangent where its raster
+ * edges consistently advance. Longer arcs can hide their true extrema within
+ * the terminal pixel cells, so do not infer exact monotonicity from those. */
+function shortSpanDirection(span: Point[], curve: Curve, g: Grid) {
+    const arc = span.slice(1).reduce((s, p, i) => s + length(span[i], p), 0);
+    if (arc > g.size * 12) return true;
+    const a = span[0], b = span.at(-1)!, epsilon = g.size * 1e-7;
+    for (const [x, y] of [[g.ux, g.uy], [-g.uy, g.ux]]) {
+        const coordinate = (p: Point) => (p.xMm - a.xMm) * x + (p.yMm - a.yMm) * y;
+        const values = span.map(coordinate), advance = values.at(-1)!;
+        if (Math.abs(advance) < g.size * 4) continue;
+        const sign = Math.sign(advance);
+        if (values.some((v, i) => i > 0 && sign * (v - values[i - 1]) < -epsilon)) continue;
+        const p = sign * coordinate(curve.c1), q = sign * (coordinate(curve.c2) - coordinate(curve.c1)), r = sign * (coordinate(b) - coordinate(curve.c2));
+        const quadratic = p - 2 * q + r, t = quadratic > 0 ? (p - q) / quadratic : -1;
+        const minimum = Math.min(p, r, t > 0 && t < 1 ? p + 2 * (q - p) * t + quadratic * t * t : Infinity);
+        if (minimum < -epsilon) return false;
+    }
+    return true;
+}
 /** Recover controls directly from source coordinates. Raster chord tangents
  * can constrain a genuine arc to the wrong direction; independent least
  * squares controls avoid that bias. Endpoints remain exact, and no continuity,
  * curvature energy or aesthetic smoothness term enters this fit. */
-function geometricCubic(span: Point[], g: Grid, createId: () => string): Curve | undefined {
+function geometricCubic(span: Point[], g: Grid, createId: () => string, requireCurvedCore = true): Curve | undefined {
     if (span.length < 5) return;
     const a = span[0], b = span.at(-1)!, d = length(a, b);
     if (d < g.size * 4) return;
     const arc = [0];
     for (let i = 1; i < span.length; i++) arc.push(arc.at(-1)! + length(span[i - 1], span[i]));
     const core = span.filter((_, i) => arc[i] > g.size * 2 && arc.at(-1)! - arc[i] > g.size * 2);
-    if (core.length >= 3 && straight(core, g)) return;
+    if (requireCurvedCore && core.length >= 3 && straight(core, g)) return;
     const parameters = arc.map(t => t / arc.at(-1)!);
     for (let iteration = 0; iteration < 12; iteration++) {
         let aa = 0, ab = 0, bb = 0, ax = 0, bx = 0, ay = 0, by = 0;
@@ -154,7 +208,7 @@ function geometricCubic(span: Point[], g: Grid, createId: () => string): Curve |
         try {
             const sampled = flatten(a, c1, c2, b, g.size * .01, createId);
             // .1-pixel sampling contributes .05; flattening contributes .01.
-            if (Math.max(spanError(span, sampled, g.size, g.size * .1), spanError(sampled, span, g.size, g.size * .1)) + g.size * .06 <= g.size * 1.05) return c;
+            if (shortSpanDirection(span, c, g) && Math.max(spanError(span, sampled, g.size, g.size * .1), spanError(sampled, span, g.size, g.size * .1)) + g.size * .06 <= g.size * 1.05) return c;
         } catch { return; }
         const p = [a, c1, c2, b], next = [...parameters];
         for (let j = 1; j + 1 < span.length; j++) {
@@ -169,7 +223,7 @@ function geometricCubic(span: Point[], g: Grid, createId: () => string): Curve |
     }
 }
 
-function ring(points: Point[], pixel: number, createId: () => string, allowCurves: boolean, boundaryCorner = false, retainCorners = false, forced:ReadonlySet<string>=new Set()) {
+function ring(points: Point[], pixel: number, createId: () => string, allowCurves: boolean, boundaryCorner = false, retainCorners = false, forced:ReadonlySet<string>=new Set(), openChain = false) {
     const g = grid(points, pixel), { fixed, at } = corners(points, g.size), lookup = new Map(points.map((p, i) => [p.id, i])), anchors = new Set<number>();
     for(const id of forced)fixed.add(id);
     // Use the inferred raster axis so rotating calibration cannot introduce
@@ -186,7 +240,7 @@ function ring(points: Point[], pixel: number, createId: () => string, allowCurve
     anchors.add(left);
     anchors.add(right);
     const tangent = (p: Point) => { const i = lookup.get(p.id)!, a = at(i, -1, g.size * 6), b = at(i, 1, g.size * 6), d = Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm); return d ? { x: (b.xMm - a.xMm) / d, y: (b.yMm - a.yMm) / d } : { x: 1, y: 0 }; };
-    const cubic = (span: Point[]): Curve | undefined => {
+    const cubic = (span: Point[], requireCurvedCore = true): Curve | undefined => {
         if (!allowCurves || span.length < 5)
             return undefined;
         const a = span[0], b = span.at(-1)!, d = length(a, b);
@@ -196,7 +250,7 @@ function ring(points: Point[], pixel: number, createId: () => string, allowCurve
         for (let j = 1; j < span.length; j++)
             arc.push(arc.at(-1)! + length(span[j - 1], span[j]));
         const core = span.filter((_, j) => arc[j] > g.size * 2 && arc.at(-1)! - arc[j] > g.size * 2);
-        if (core.length >= 3 && straight(core, g))
+        if (requireCurvedCore && core.length >= 3 && straight(core, g))
             return undefined;
         const oneSided = (p: Point, direction: number) => { const q = at(lookup.get(p.id)!, direction, Math.min(g.size * 6, arc.at(-1)! * .25)), dx = (q.xMm - p.xMm) * direction, dy = (q.yMm - p.yMm) * direction, n = Math.hypot(dx, dy); return n ? { x: dx / n, y: dy / n } : tangent(p); }, u = fixed.has(a.id) ? oneSided(a, 1) : tangent(a), v = fixed.has(b.id) ? oneSided(b, -1) : tangent(b);
         const parameters = arc.map(t => t / arc.at(-1)!);
@@ -218,8 +272,8 @@ function ring(points: Point[], pixel: number, createId: () => string, allowCurve
                 return undefined;
             const c: Curve = { id: createId(), startNodeId: a.id, endNodeId: b.id, c1: { id: createId(), xMm: a.xMm + u.x * l, yMm: a.yMm + u.y * l }, c2: { id: createId(), xMm: b.xMm - v.x * r, yMm: b.yMm - v.y * r } };
             try {
-                const sampled = flatten(a, c.c1, c.c2, b, g.size * .025, createId);
-                if (Math.max(spanError(span, sampled, g.size), spanError(sampled, span, g.size)) + g.size * .025 <= g.size * 1.025)
+                const sampled = flatten(a, c.c1, c.c2, b, g.size * .01, createId);
+                if (shortSpanDirection(span, c, g) && Math.max(spanError(span, sampled, g.size, g.size * .1), spanError(sampled, span, g.size, g.size * .1)) + g.size * .06 <= g.size * 1.05)
                     return c;
             }
             catch {
@@ -301,7 +355,8 @@ function ring(points: Point[], pixel: number, createId: () => string, allowCurve
     // fit instead caps distance to the two incident original edges at one pixel.
     // Native contact bevels and very acute tips stay exact. No area correction,
     // anchor averaging or bending-energy optimization is applied.
-    const place = () => segments.map((segment, i) => { const p = segment.a, previous = segments[(i + segments.length - 1) % segments.length], a0 = previous.a, b0 = segment.b, ux = p.xMm - a0.xMm, uy = p.yMm - a0.yMm, vx = b0.xMm - p.xMm, vy = b0.yMm - p.yMm, turn = Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy); if (forced.has(p.id) || bevel(p) || retainCorners && fixed.has(p.id) || fixed.has(p.id) && (Math.abs(turn) > Math.PI * .8) || !segment.line || !previous.line)
+    const recoveredAnchors = new Map<string, Point>();
+    const place = () => segments.map((segment, i) => { const p = recoveredAnchors.get(segment.a.id) ?? segment.a, previous = segments[(i + segments.length - 1) % segments.length], a0 = previous.a, b0 = segment.b, ux = p.xMm - a0.xMm, uy = p.yMm - a0.yMm, vx = b0.xMm - p.xMm, vy = b0.yMm - p.yMm, turn = Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy); if (forced.has(p.id) || bevel(p) || retainCorners && fixed.has(p.id) || fixed.has(p.id) && (Math.abs(turn) > Math.PI * .8) || !segment.line || !previous.line)
         return p; const a = previous.line, b = segment.line, det = a.nx * b.ny - a.ny * b.nx; if (Math.abs(det) < .05)
         return p; const x = (a.offset * b.ny - a.ny * b.offset) / det - p.xMm, y = (a.nx * b.offset - a.offset * b.nx) / det - p.yMm, u = Math.max(-g.size, Math.min(g.size, x * g.ux + y * g.uy)), v = Math.max(-g.size, Math.min(g.size, -x * g.uy + y * g.ux)); const index = lookup.get(p.id)!, near = [points[(index + points.length - 1) % points.length], p, points[(index + 1) % points.length]], point = (scale: number) => ({ ...p, xMm: p.xMm + (u * g.ux - v * g.uy) * scale, yMm: p.yMm + (u * g.uy + v * g.ux) * scale }), error = (scale: number) => Math.min(distance(point(scale), near[0], p), distance(point(scale), p, near[2])); let scale = Math.min(1, g.size * .9 / (Math.hypot(u, v) || 1)); if (boundaryCorner)
         scale = 1; if (boundaryCorner && error(1) > g.size) {
@@ -349,21 +404,27 @@ function ring(points: Point[], pixel: number, createId: () => string, allowCurve
             }
         }
     }
-        if (allowCurves) {
+
+    const consolidate = (requireCurvedCore: boolean, anchors?: ReadonlyMap<string, Point>) => {
         for (let i = 0; i < segments.length; i++) {
             for (let j = Math.min(segments.length - 1, i + 8); j > i; j--) {
                 if (segments.slice(i + 1, j + 1).some(s => fixed.has(s.a.id) || forced.has(s.a.id) || bevel(s.a))) continue;
                 const start = lookup.get(segments[i].a.id)!, end = lookup.get(segments[j].b.id)!;
-                const span = end > start ? points.slice(start, end + 1) : [...points.slice(start), ...points.slice(0, end + 1)];
+                const raw = end > start ? points.slice(start, end + 1) : [...points.slice(start), ...points.slice(0, end + 1)];
+                const span = anchors ? raw.map((p, k) => k === 0 || k === raw.length - 1 ? anchors.get(p.id) ?? p : p) : raw;
                 if (straight(span, g)) continue;
-                const c = cubic(span) ?? geometricCubic(span, g, createId);
+                const c = cubic(span, requireCurvedCore) ?? geometricCubic(span, g, createId, requireCurvedCore);
                 if (!c) continue;
-                segments.splice(i, j - i + 1, {a:segments[i].a,b:segments[j].b,curve:c});
+                if (anchors) {
+                    recoveredAnchors.set(span[0].id, span[0]);
+                    recoveredAnchors.set(span.at(-1)!.id, span.at(-1)!);
+                }
+                segments.splice(i, j - i + 1, { a: segments[i].a, b: segments[j].b, curve: c });
                 break;
             }
         }
-    }
-
+    };
+    if (allowCurves && !openChain) consolidate(true);
     let nodes = place();
     for (let pass = 0; pass < 12; pass++) {
         let changed = false;
@@ -418,7 +479,24 @@ function ring(points: Point[], pixel: number, createId: () => string, allowCurve
             changed = true;
         }
     }
-    return { nodes, curves: segments.flatMap(s => s.curve ? [s.curve] : []), segments, fixed, g };
+    if (allowCurves && openChain) {
+        // Retain endpoint coordinates recovered from supporting source lines.
+        // Refitting an arc must not reset its neighbours to a different anchor.
+        consolidate(false, new Map(nodes.map(p => [p.id, p])));
+        nodes = place();
+    }
+    let curves = segments.flatMap(s => s.curve ? [s.curve] : []);
+    if (nodes.length === 2 && curves.length) {
+        // Two fitted arcs can describe a valid closed loop, while the editable
+        // and native schemas require at least three anchors. Split one arc
+        // exactly with de Casteljau; this adds no shape approximation.
+        const curve = curves[0], a = nodes.find(n => n.id === curve.startNodeId)!, b = nodes.find(n => n.id === curve.endNodeId)!;
+        const mid = (p: Point, q: Point): Point => ({ id: createId(), xMm: (p.xMm + q.xMm) / 2, yMm: (p.yMm + q.yMm) / 2 });
+        const p = mid(a, curve.c1), q = mid(curve.c1, curve.c2), r = mid(curve.c2, b), s = mid(p, q), t = mid(q, r), center = mid(s, t);
+        nodes.splice(nodes.indexOf(a) + 1, 0, center);
+        curves = [...curves.filter(c => c !== curve), { ...curve, endNodeId: center.id, c1: p, c2: s }, { ...curve, id: createId(), startNodeId: center.id, c1: t, c2: r }];
+    }
+    return { nodes, curves, segments, fixed, g };
 }
 /** A nearly parallel narrow strip is ill-conditioned: independent raster-line
  * intercepts can bias its measured thickness. Keep both directions and native
@@ -471,8 +549,10 @@ function recoverLocal(piece: Piece, pixelMm: number, createId: () => string): Pi
         const r = ring(h, pixelMm, createId, true), curves = new Map(r.curves.map(c => [c.startNodeId, c]));
         return r.nodes.flatMap((a, i) => { const c = curves.get(a.id), b = r.nodes[(i + 1) % r.nodes.length]; return c ? flatten(a, c.c1, c.c2, b, outer.g.size * .1, createId).slice(0, -1) : [a]; });
     });
-    let candidate = { ...piece, nodes: outer.nodes, curves: outer.curves, holes };
-    if (!candidate.curves.length && candidate.nodes.length <= 32 && piece.nodes.length <= 512 && outer.fixed.size >= 4) {
+    let candidate: Piece = { ...piece, nodes: outer.nodes, curves: outer.curves, holes };
+    const compactLines = (input: Piece) => {
+      let candidate = input;
+      if (!candidate.curves?.length && candidate.nodes.length <= 32 && piece.nodes.length <= 512) {
         const source = new Map(piece.nodes.map((p, i) => [p.id, i])), bevel = (p: Point) => { const i = source.get(p.id)!; return Math.min(length(p, piece.nodes[(i + piece.nodes.length - 1) % piece.nodes.length]), length(p, piece.nodes[(i + 1) % piece.nodes.length])) < Math.min(.04, outer.g.size * .1); };
         for (let changed = true; changed && candidate.nodes.length > 3;) {
             changed = false;
@@ -486,6 +566,16 @@ function recoverLocal(piece: Piece, pixelMm: number, createId: () => string): Pi
                 }
             }
         }
+      }
+      return candidate;
+    };
+    candidate = compactLines(candidate);
+    if (candidate.curves?.length && candidate.nodes.length <= 32 && piece.nodes.length <= 512) {
+        const lines = ring(piece.nodes, pixelMm, createId, false), compact = compactLines({ ...candidate, nodes: lines.nodes, curves: [] }), polygon = narrowMeasuredStrip(compact, piece, outer.g, pixelMm) ?? compact;
+        // Prefer a smaller source-supported straight representation whenever it
+        // meets the same complete error and topology contract. A few irregular
+        // tip pixels must not turn the painted side of a diamond into an arc.
+        if (polygon.nodes.length < candidate.nodes.length && safeContour(polygon, piece, pixelMm) && contourBoundaryError(polygon, piece, pixelMm * .1, outer.g.size * 1.05) <= outer.g.size * 1.05) candidate = polygon;
     }
     if (safeContour(candidate, piece, pixelMm) && contourBoundaryError(candidate, piece, pixelMm * .1, outer.g.size * 1.05) <= outer.g.size * 1.05)
         return candidate;
@@ -547,9 +637,23 @@ export function recoverBoundaryChain(points:Point[],pixelMm:number,createId:()=>
  }
  const nx=-(b.yMm-a.yMm)/d,ny=(b.xMm-a.xMm)/d,q={id:createId(),xMm:b.xMm+nx*reach,yMm:b.yMm+ny*reach},r={id:createId(),xMm:a.xMm+nx*reach,yMm:a.yMm+ny*reach},scaffold=[...local,q,r],forced=new Set([a.id,b.id,q.id,r.id]);
  for(const allowCurves of[true,false]){
-  const fit=ring(scaffold,pixelMm,createId,allowCurves,false,false,forced),start=fit.nodes.findIndex(p=>p.id===a.id),end=fit.nodes.findIndex(p=>p.id===b.id);
+  const fit=ring(scaffold,pixelMm,createId,allowCurves,false,false,forced,true),start=fit.nodes.findIndex(p=>p.id===a.id),end=fit.nodes.findIndex(p=>p.id===b.id);
   if(start<0||end<start)continue;
-  const nodes=fit.nodes.slice(start,end+1),ids=new Set(nodes.map(n=>n.id)),curves=fit.curves.filter(c=>ids.has(c.startNodeId)&&ids.has(c.endNodeId)),byStart=new Map(curves.map(c=>[c.startNodeId,c])),sampled=nodes.flatMap((n,i)=>{const c=byStart.get(n.id);return c?flatten(n,c.c1,c.c2,nodes[i+1],pixelMm/.8*.01,createId).slice(0,-1):[n];}),g=fit.g.size;
+  let nodes=fit.nodes.slice(start,end+1);const ids=new Set(nodes.map(n=>n.id)),curves=fit.curves.filter(c=>ids.has(c.startNodeId)&&ids.has(c.endNodeId)),byStart=new Map(curves.map(c=>[c.startNodeId,c])),source=new Map(local.map((n,i)=>[n.id,i])),g=fit.g.size;
+  // Check each supporting line against its original span after fitting joins.
+  // Restore only an offending line span; retain independently valid arcs.
+  for(let pass=0;pass<3;pass++){
+   const bad=new Map<number,Point[]>(),anchors=new Map<string,Point>();
+   for(let i=0;i+1<nodes.length;i++){
+    if(byStart.has(nodes[i].id))continue;
+    const from=source.get(nodes[i].id)!,to=source.get(nodes[i+1].id)!,span=local.slice(from,to+1),chord=[nodes[i],nodes[i+1]];
+    if(Math.max(spanError(span,chord,g,g*.1),spanError(chord,span,g,g*.1))+g*.05<=g*1.05)continue;
+    bad.set(i,span);anchors.set(span[0].id,span[0]);anchors.set(span.at(-1)!.id,span.at(-1)!);
+   }
+   if(!bad.size)break;
+   nodes=nodes.flatMap((n,i)=>bad.has(i)?bad.get(i)!.slice(0,-1):[anchors.get(n.id)??n]);
+  }
+  const sampled=nodes.flatMap((n,i)=>{const c=byStart.get(n.id);return c?flatten(n,c.c1,c.c2,nodes[i+1],pixelMm/.8*.01,createId).slice(0,-1):[n];});
   // Refine sampling to .1 pixels, hence a .05-pixel Lipschitz margin.
   // Only a cubic needs the additional .01-pixel flattening margin; charging
   // that to an exact line needlessly rejects shallow digital straight spans.

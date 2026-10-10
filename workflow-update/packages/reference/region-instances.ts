@@ -1,4 +1,5 @@
 import {rasterComponents} from './raster';
+import {mergeUnsupportedInstanceLabels} from './instance-boundaries';
 
 /** Ink is a separator, not an extra fabric color. Grow independent pigment
  * interiors into the ink without joining them back together across the line.
@@ -20,7 +21,8 @@ export function pigmentInstances(width:number,height:number,mask:Uint8Array,ink:
  // Only seed frontiers enter the queue; large pigment interiors need no heap.
  for(const seed of seeds)for(const i of seed)visit(i,(n,diagonal)=>{if(distance[n])relax(i,n,diagonal);});
  while(pending){const bucket=current%64;if(heads[bucket]>=buckets[bucket].length){buckets[bucket]=[];heads[bucket]=0;current++;continue;}const i=buckets[bucket][heads[bucket]++];pending--;if(distance[i]!==current)continue;visit(i,(n,diagonal)=>relax(i,n,diagonal));}
+ if(softInk&&brightness)mergeUnsupportedInstanceLabels(width,height,ids,ink,brightness,seeds.length);
  const groups=seeds.map(()=>[] as number[]),remaining=new Uint8Array(mask.length);
  for(let i=0;i<mask.length;i++)if(mask[i]){if(ids[i]>=0)groups[ids[i]].push(i);else remaining[i]=1;}
- return [...groups,...rasterComponents(width,height,remaining)];
+ return [...groups.filter(g=>g.length),...rasterComponents(width,height,remaining)];
 }

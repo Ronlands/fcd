@@ -67,13 +67,44 @@ export function recoverSharedContours(originals:Piece[],pixelMm:number,createId:
   }
   return bad;
  };
- let pieces=assemble();const valid=(piece:Piece,i:number)=>piece.nodes.length<=2000&&piece.holes?.every(r=>r.length<=2000)!==false&&safeContour(piece,originals[i],pixelMm)&&contourBoundaryError(piece,originals[i],g*.1,g*1.05)<=g*1.05;
+ let pieces=assemble();const valid=(piece:Piece,i:number)=>piece.nodes.length>=3&&piece.nodes.length<=2000&&piece.holes?.every(r=>r.length>=3&&r.length<=2000)!==false&&safeContour(piece,originals[i],pixelMm)&&contourBoundaryError(piece,originals[i],g*.1,g*1.05)<=g*1.05;
+ // A coarse arc may satisfy the distance envelope but miss a small owner's
+ // area budget. Increase the fit's resolution before discarding its geometry.
+ // Subdivision uses original measured vertices; both material owners still
+ // receive exactly the same boundary and the final contracts are unchanged.
+ const refine=(chain:Chain,depth:number)=>{
+  const source=chain.closed?[...chain.raw,chain.raw[0]]:chain.raw;
+  const fit=(raw:Point[],level:number):{nodes:Point[];curves:Curve[]}=>{
+   if(!level||raw.length<4)return recoverBoundaryChain(raw,pixelMm,createId);
+   const arc=[0];for(let i=1;i<raw.length;i++)arc.push(arc.at(-1)!+Math.hypot(raw[i].xMm-raw[i-1].xMm,raw[i].yMm-raw[i-1].yMm));
+   let middle=1;while(middle+1<raw.length-1&&arc[middle]<arc.at(-1)!/2)middle++;
+   const a=fit(raw.slice(0,middle+1),level-1),b=fit(raw.slice(middle),level-1);
+   return {nodes:[...a.nodes.slice(0,-1),...b.nodes],curves:[...a.curves,...b.curves]};
+  };
+  const result=fit(source,depth);if(chain.closed)result.nodes.pop();
+  if(chain.hole)return {nodes:contourPolyline(result.nodes,result.curves,chain.closed,g*.06,createId),curves:[]};
+  return result;
+ };
  // Restore shared chains coherently. Prefer the smallest one-chain repair that
  // makes the failed source valid; never let its neighbour keep a different fit.
- for(let pass=0;pass<=chains.length;pass++){
+ // A restoration consumes a chain; between restorations, each accepted refit
+ // makes at least one additional owner valid without invalidating another.
+ // Include both kinds of progress in the bound (a refit consumes no chain).
+ const maxPasses=(chains.length+1)*(originals.length+1);
+ for(let pass=0;pass<maxPasses;pass++){
   const crossing=crossingChains();if(crossing.size){const active=[...crossing].filter(i=>!chains[i].restored);if(!active.length)throw Error('RESOURCE_LIMIT');for(const i of active){const c=chains[i];c.nodes=c.raw;c.curves=[];c.restored=true;}pieces=assemble();continue;}
   const failed=pieces.findIndex((p,i)=>!valid(p,i));if(failed<0)break;
   const incident=chains.filter(c=>c.owners.has(failed)&&!c.restored).sort((a,b)=>a.raw.length-a.nodes.length-(b.raw.length-b.nodes.length));let fixed=false;
+  for(const c of incident){
+   const before={nodes:c.nodes,curves:c.curves};
+   for(const depth of [1,2]){
+    Object.assign(c,refine(c,depth));const candidate=assemble();
+    if(valid(candidate[failed],failed)&&[...c.owners].every(owner=>!valid(pieces[owner],owner)||valid(candidate[owner],owner))){pieces=candidate;fixed=true;break;}
+    Object.assign(c,before);
+   }
+   if(fixed)break;
+  }
+  if(fixed)continue;
   for(const c of incident){const before={nodes:c.nodes,curves:c.curves};c.nodes=c.raw;c.curves=[];const candidate=assemble();if(valid(candidate[failed],failed)){c.restored=true;pieces=candidate;fixed=true;break;}Object.assign(c,before);}
   if(!fixed){if(!incident.length)throw Error('RESOURCE_LIMIT');for(const c of incident){c.nodes=c.raw;c.curves=[];c.restored=true;}pieces=assemble();}
  }

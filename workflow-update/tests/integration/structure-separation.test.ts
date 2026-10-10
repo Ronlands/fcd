@@ -1,14 +1,23 @@
-import {it,expect} from 'vitest';
+import {it,expect,vi} from 'vitest';
 import sharp from 'sharp';
 import {illustrationRegions,pigmentFamily} from '../../packages/reference/illustration';
 import {pigmentInstances} from '../../packages/reference/region-instances';
 import {structureInstances} from '../../packages/reference/structure-separation';
+import * as imageEdges from '../../packages/reference/image-edge-evidence';
+import type {IllustrationRegion} from '../../packages/reference/illustration';
 
 async function image(view:'front'|'back'='front'){
  const width=view==='front'?666:609,height=750,left=view==='front'?609:0;
  const rgba=new Uint8Array(await sharp('tests/fixtures/character-front-back.jpg').extract({left,top:0,width,height}).ensureAlpha().raw().toBuffer());
- const regions=illustrationRegions(width,height,rgba).regions,mask=new Uint8Array(width*height);
- for(const r of regions.filter(r=>pigmentFamily(r.color)===2))for(const i of r.indices)mask[i]=1;
+ // structureInstances runs before image-edge ownership refinement in the
+ // production pipeline. Capture that stage's region mask; replaying the
+ // upstream separator on the final refined mask changes its input contract.
+ let regions:IllustrationRegion[]|undefined;
+ const refine=imageEdges.refineImageEdgeOwnership;
+ const observe=vi.spyOn(imageEdges,'refineImageEdgeOwnership').mockImplementation((w,h,pixels,input)=>{regions=input;return refine(w,h,pixels,input);});
+ try{illustrationRegions(width,height,rgba);}finally{observe.mockRestore();}
+ expect(regions).toBeDefined();const mask=new Uint8Array(width*height);
+ for(const r of regions!.filter(r=>pigmentFamily(r.color)===2))for(const i of r.indices)mask[i]=1;
  return {width,height,rgba,mask,ink:new Uint8Array(mask.length)};
 }
 const owner=(groups:number[][],width:number,x:number,y:number)=>groups.findIndex(g=>g.includes(y*width+x));

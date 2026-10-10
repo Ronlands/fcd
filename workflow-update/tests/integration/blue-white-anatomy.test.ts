@@ -1,6 +1,8 @@
 import {it,expect} from 'vitest';
 import sharp from 'sharp';
-import {illustrationRegions} from '../../packages/reference/illustration';
+import {illustrationRegions,pigmentFamily} from '../../packages/reference/illustration';
+
+function connectedPixels(indices:number[],width:number){const remaining=new Set(indices),queue=[indices[0]];remaining.delete(indices[0]);for(let k=0;k<queue.length;k++){const i=queue[k],x=i%width;for(const j of[x?i-1:-1,x+1<width?i+1:-1,i-width,i+width])if(remaining.delete(j))queue.push(j);}return remaining.size===0;}
 
 it('retains actual white chest and blue shoulder joint candidates without projecting a lower forearm patch onto the torso',async()=>{
  const width=803,rgba=new Uint8Array(await sharp('tests/fixtures/character-blue-white-front-back.png').extract({left:0,top:0,width,height:1024}).ensureAlpha().raw().toBuffer()),r=illustrationRegions(width,1024,rgba),owner=(x:number,y:number)=>r.regions.find(s=>s.indices.includes(y*width+x))!;
@@ -18,11 +20,22 @@ it('retains both torso and leg candidates for the actual continuous black flanks
 it('recognizes the actual back-view paired heel pigment despite a connected lower silhouette without cutting any source',async()=>{
  const width=733,height=1024,rgba=new Uint8Array(await sharp('tests/fixtures/character-blue-white-front-back.png').extract({left:803,top:0,width,height}).ensureAlpha().raw().toBuffer()),result=illustrationRegions(width,height,rgba);
  expect(result.anatomical,'a ground-shadow connection must not erase all reliable back-view anatomy').toBe(true);
- expect(result.regions).toHaveLength(46);
  const owner=(x:number,y:number)=>result.regions.find(r=>r.indices.includes(y*width+x));
  const diamond=owner(260,350)!;
- expect(diamond.indices).toHaveLength(1813);expect(diamond.part).toBe('body');expect(diamond.side).toBe('center');expect(diamond.confidence).toBeGreaterThan(.7);
- for(const [x,y,side,pixels]of[[178,925,'left',4919],[320,925,'right',4713]] as const){const heel=owner(x,y)!;expect(heel.indices).toHaveLength(pixels);expect(heel.part).toBe('foot');expect(heel.side).toBe(side);expect(heel.confidence).toBeGreaterThan(.7);}
+ expect(diamond).toBeDefined();expect(diamond.part).toBe('body');expect(diamond.side).toBe('center');expect(diamond.confidence).toBeGreaterThan(.7);expect(pigmentFamily(diamond.color)).toBe(4);expect(connectedPixels(diamond.indices,width)).toBe(true);
+ // Fixed original-image interiors identify the blue back diamond even when
+ // its antialiased border receives a more accurate foreground owner.
+ for(const [x,y]of[[260,350],[250,350],[270,350],[260,335],[260,365]]){const i=(y*width+x)*4;expect(rgba[i+2]-rgba[i]).toBeGreaterThan(70);expect(rgba[i+1]-rgba[i]).toBeGreaterThan(40);expect(owner(x,y)).toBe(diamond);}
+ for(const [x,y]of[[220,350],[300,350],[260,300],[260,395]]){const i=(y*width+x)*4;expect(Math.max(...rgba.subarray(i,i+3))).toBeLessThan(80);expect(owner(x,y)).not.toBe(diamond);}
+ const diamondXs=diamond.indices.map(i=>i%width),diamondYs=diamond.indices.map(i=>Math.floor(i/width));
+ expect(Math.min(...diamondXs)).toBeGreaterThan(230);expect(Math.max(...diamondXs)).toBeLessThan(290);expect(Math.min(...diamondYs)).toBeGreaterThan(310);expect(Math.max(...diamondYs)).toBeLessThan(400);
+ // The original heel interiors and adjacent white fur are independently
+ // visible in the PNG. Edge recovery may change antialiased border ownership,
+ // so an old exact pixel count cannot serve as a source-geometry oracle.
+ const heels=[[178,925,'left',[[178,890],[178,965],[198,925],[160,950]]],[320,925,'right',[[320,890],[320,965],[305,925],[335,950]]]] as const,selected=[];
+ for(const [x,y,side,interior]of heels){const heel=owner(x,y)!;selected.push(heel);expect(heel.part).toBe('foot');expect(heel.side).toBe(side);expect(heel.confidence).toBeGreaterThan(.7);expect(pigmentFamily(heel.color)).toBe(4);expect(connectedPixels(heel.indices,width)).toBe(true);for(const [px,py]of interior)expect(owner(px,py)).toBe(heel);const ys=heel.indices.map(i=>Math.floor(i/width));expect(Math.min(...ys)).toBeGreaterThan(850);expect(Math.max(...ys)).toBeLessThan(980);}
+ expect(selected[0]).not.toBe(selected[1]);for(const [x,y]of[[140,925],[210,925],[280,925],[355,925]]){const white=owner(x,y)!;expect(pigmentFamily(white.color)).toBe(0);expect(selected).not.toContain(white);}
+
  expect(result.regions.some(r=>r.part==='unknown')).toBe(true); // Cross-head/torso and ear ambiguity still need review.
  const all=result.regions.flatMap(r=>r.indices);expect(new Set(all).size).toBe(all.length);expect(all.length).toBe(result.foregroundPixels-result.discardedPixels);
 });
@@ -51,7 +64,18 @@ it.each([128,512])('the actual back-view foot support is scale-relative at %spx 
 
 it('the real back-view compact bilateral black hands must not be attached as tail pigment',async()=>{
  const width=733,height=1024,rgba=new Uint8Array(await sharp('tests/fixtures/character-blue-white-front-back.png').extract({left:803,top:0,width,height}).ensureAlpha().raw().toBuffer()),result=illustrationRegions(width,height,rgba);
- for(const [x,y,side,pixels]of[[75,560,'left',3281],[440,560,'right',3144]] as const){const hand=result.regions.find(r=>r.indices.includes(y*width+x))!;expect(hand.indices).toHaveLength(pixels);expect(hand.part).toBe('paw');expect(hand.side).toBe(side);expect(hand.confidence).toBeGreaterThan(.7);}
+ const owner=(x:number,y:number)=>result.regions.find(r=>r.indices.includes(y*width+x)),selected=[];
+ for(const [x,y,side,outsideX,left,right]of[[75,560,'left',45,40,130],[440,560,'right',470,390,480]] as const){
+  const hand=owner(x,y)!;selected.push(hand);expect(hand).toBeDefined();expect(hand.part).toBe('paw');expect(hand.side).toBe(side);expect(hand.confidence).toBeGreaterThan(.7);expect(pigmentFamily(hand.color)).toBe(6);expect(connectedPixels(hand.indices,width)).toBe(true);
+  // Independently visible dark palm cores survive antialiased-border changes.
+  for(const [px,py]of[[x,y],[x-5,y],[x+5,y],[x,y-10],[x,y+10]]){const i=(py*width+px)*4;expect(Math.max(...rgba.subarray(i,i+3))).toBeLessThan(80);expect(owner(px,py)).toBe(hand);}
+  for(const [px,py]of[[outsideX,y],[x,y-50],[x,y+50]]){const i=(py*width+px)*4;expect(Math.min(...rgba.subarray(i,i+3))).toBeGreaterThan(240);expect(owner(px,py)).not.toBe(hand);}
+  const xs=hand.indices.map(i=>i%width),ys=hand.indices.map(i=>Math.floor(i/width));
+  expect(Math.min(...xs)).toBeGreaterThan(left);expect(Math.max(...xs)).toBeLessThan(right);expect(Math.min(...ys)).toBeGreaterThan(510);expect(Math.max(...ys)).toBeLessThan(600);
+  const frames=result.partBounds.filter(b=>b.part==='paw'&&b.side===side);expect(frames).toHaveLength(1);const frame=frames[0];
+  expect(frame.minX).toBeLessThanOrEqual(Math.min(...xs));expect(frame.maxX).toBeGreaterThanOrEqual(Math.max(...xs));expect(frame.minY).toBeLessThanOrEqual(Math.min(...ys));expect(frame.maxY).toBeGreaterThanOrEqual(Math.max(...ys));
+ }
+ expect(selected[0]).not.toBe(selected[1]);
 });
 it('a single dark lateral tail does not become a paw even when paired feet independently support the character',()=>{
  const {width,height,rgba}=connectedFigure(false);
@@ -67,7 +91,7 @@ it.each([['front',0,803],['back',803,733]] as const)('retains supported minor wh
  for(const part of ['arm','leg','foot'] as const)for(const side of ['left','right'] as const)expect(white.contexts?.some(c=>c.part===part&&c.side===side),`${_view} continuous white ${part}:${side}`).toBe(true);
  for(const [x,y,side]of(left===0?[[325,80,'left'],[535,80,'right']]:[[160,80,'left'],[355,80,'right']])as [number,number,string][]){const ear=owner(x,y);expect(ear.part).toBe('ear');expect(ear.side).toBe(side);expect(ear.confidence).toBeGreaterThan(.5);}
  const collar=owner(left===0?428:260,left===0?350:410);expect(collar.contexts?.some(c=>c.part==='body'&&c.side==='center')).toBe(true);expect(collar.contexts?.some(c=>c.part==='head'&&c.side==='center')).toBe(true);
- expect(result.regions).toHaveLength(left===0?87:46);const all=result.regions.flatMap(r=>r.indices);expect(new Set(all).size).toBe(all.length);expect(all.length).toBe(result.foregroundPixels-result.discardedPixels);
+ const all=result.regions.flatMap(r=>r.indices);expect(new Set(all).size).toBe(all.length);expect(all.length).toBe(result.foregroundPixels-result.discardedPixels);
 });
 it.each([['front',0,803,[[345,330,'left'],[510,330,'right']],[[325,620,'left'],[525,620,'right']]],['back',803,733,[[175,330,'left'],[345,330,'right']],[[163,620,'left'],[355,620,'right']]]] as const)('uses supported shoulder and hip seams for real %s registration while retaining every source pixel',async(_view,left,width,shoulders,thighs)=>{
  const rgba=new Uint8Array(await sharp('tests/fixtures/character-blue-white-front-back.png').extract({left,top:0,width,height:1024}).ensureAlpha().raw().toBuffer()),r=illustrationRegions(width,1024,rgba),owner=(x:number,y:number)=>r.regions.find(a=>a.indices.includes(y*width+x))!;

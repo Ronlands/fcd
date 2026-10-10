@@ -4,6 +4,16 @@ import {illustrationRegions,pigmentFamily} from '../../packages/reference/illust
 import {traceMask} from '../../apps/desktop/main/reference-segmentation';
 import {smoothContour} from '../../packages/reference/smooth-contour';
 import {safeContour,contourBoundaryError} from '../../packages/reference/contour-topology';
+function continuousTrunk(result:ReturnType<typeof illustrationRegions>,width:number){
+ // These broad cyan interiors are independently supported by original JPEG
+ // RGB values from the shoulder through the flank and thigh. They identify
+ // the same material instance without relying on an old antialiasing count.
+ const owner=(x:number,y:number)=>result.regions.find(r=>r.indices.includes(y*width+x)),source=owner(300,300);
+ expect(source,'the original connected cyan thigh/body area must stay one source').toBeDefined();expect(pigmentFamily(source!.color)).toBe(4);
+ for(const [x,y]of[[325,350],[310,400],[335,450],[360,490],[380,500]])expect(owner(x,y)).toBe(source);
+ const remaining=new Set(source!.indices),queue=[source!.indices[0]];remaining.delete(queue[0]);for(let k=0;k<queue.length;k++){const i=queue[k],x=i%width;for(const n of[x?i-1:-1,x+1<width?i+1:-1,i-width,i+width])if(remaining.delete(n))queue.push(n);}expect(remaining.size).toBe(0);
+ return source!;
+}
 async function front(){const {data,info}=await sharp('tests/fixtures/character-front-back.jpg').extract({left:609,top:0,width:666,height:750}).ensureAlpha().raw().toBuffer({resolveWithObject:true});return {width:info.width,height:info.height,rgba:new Uint8Array(data)};}
 it('classifies a dominant back-head blue region with central lower-face support while preserving cross-body white ambiguity',async()=>{
  const width=609,height=750,rgba=new Uint8Array(await sharp('tests/fixtures/character-front-back.jpg').extract({left:0,top:0,width,height}).ensureAlpha().raw().toBuffer()),result=illustrationRegions(width,height,rgba),blue=result.regions.find(r=>pigmentFamily(r.color)===4&&r.indices.length>10000&&r.indices.every(i=>Math.floor(i/width)<240));
@@ -39,8 +49,7 @@ it('real yellow lower-thigh fur retains gradual warm-shadow boundary pixels with
 });
 
 it('keeps continuous trunk pigment intact and records placement candidates without artificial cut edges',async()=>{
- const {width,height,rgba}=await front(),result=illustrationRegions(width,height,rgba),blue=result.regions.filter(r=>pigmentFamily(r.color)===4),continuous=blue.find(r=>r.indices.length===31526);
- expect(continuous,'the original connected cyan thigh/body area must stay one source').toBeDefined();
+ const {width,height,rgba}=await front(),result=illustrationRegions(width,height,rgba),continuous=continuousTrunk(result,width);
  expect(continuous!.contexts?.some(c=>c.part==='body'&&c.side==='center')).toBe(true);
  expect(continuous!.contexts?.some(c=>c.part==='arm')).toBe(true);
  expect(continuous!.contexts?.some(c=>c.part==='leg')).toBe(true);
@@ -72,6 +81,6 @@ it('real arm registration excludes detached tail and low hip while preserving bo
   const contains=(x:number,y:number)=>arms.some(b=>x>=b.minX&&x<b.maxX&&y>=b.minY&&y<b.maxY);
   for(const [x,y] of probes)expect(contains(x,y),`${file}:${left} visible arm ${x},${y}`).toBe(true);
   for(const [x,y] of excluded)expect(contains(x,y),`${file}:${left} tail/hip ${x},${y}`).toBe(false);
-  if(file==='character-front-back.jpg'&&left===609)expect(result.regions.some(r=>r.indices.length===31526)).toBe(true);
+  if(file==='character-front-back.jpg'&&left===609)continuousTrunk(result,width);
  }
 });

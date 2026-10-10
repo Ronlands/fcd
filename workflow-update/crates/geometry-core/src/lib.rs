@@ -120,7 +120,12 @@ fn reliable_nonzero_area(p: &[Point]) -> bool {
     let twice_area = 2. * area(p).abs();
     twice_area.is_finite() && twice_area > error
 }
-fn validate_with_limit(p: &[Point], limit: usize) -> Result<(), &'static str> {
+// Anchor chords are not the boundary of a Bézier contour. Check editable
+// coordinates and identifiers here; check topology on the sampled boundary.
+pub(crate) fn validate_control_nodes(p: &[Point]) -> Result<(), &'static str> {
+    validate_node_attributes(p, 2000)
+}
+fn validate_node_attributes(p: &[Point], limit: usize) -> Result<(), &'static str> {
     if p.len() < 3 || p.len() > limit {
         return Err("nodeCount");
     }
@@ -138,6 +143,10 @@ fn validate_with_limit(p: &[Point], limit: usize) -> Result<(), &'static str> {
             return Err("duplicateNode");
         }
     }
+    Ok(())
+}
+fn validate_with_limit(p: &[Point], limit: usize) -> Result<(), &'static str> {
+    validate_node_attributes(p, limit)?;
     // Broad-phase bounds avoid comparing every dense curve sample with every
     // other sample. The exact intersection predicate and its tolerance stay.
     let mut boxes: Vec<_> = p.iter().enumerate().map(|(i, a)| {

@@ -67,3 +67,27 @@ fn derived_contours_still_reject_crossings_and_duplicate_identifiers() {
     duplicate[100].id = duplicate[1300].id.clone();
     assert_eq!(crate::validate_sampled(&duplicate), Err("duplicateNode"));
 }
+
+#[test]
+fn curved_boundary_is_validated_instead_of_its_crossing_anchor_chords() {
+    let mut piece: Piece = serde_json::from_value(json!({
+        "id":"curved", "name":"Simple curved boundary", "closed":true,
+        "allowanceMm":0, "cutQty":1, "mirror":false, "material":"fur", "furRad":0, "color":"#ffcc22",
+        "nodes":[
+            {"id":"a","xMm":0,"yMm":0}, {"id":"b","xMm":2,"yMm":2},
+            {"id":"c","xMm":0,"yMm":2}, {"id":"d","xMm":2,"yMm":0}
+        ],
+        "curves":[{"id":"arc", "startNodeId":"c", "endNodeId":"d",
+            "c1":{"id":"h1","xMm":-4,"yMm":2},
+            "c2":{"id":"h2","xMm":-4,"yMm":-4}}]
+    })).unwrap();
+    assert_eq!(validate(&piece.nodes), Err("selfIntersection"));
+    let geometry = analyze(&piece);
+    assert!(geometry.issues.iter().all(|i| i.severity != "error"), "{:?}", geometry.issues);
+    assert!(geometry.area_mm2 > 1.);
+    // Removing the arc makes the actual contour cross. It is still rejected.
+    piece.curves = None;
+    assert!(analyze(&piece).issues.iter().any(|i| i.message_key == "selfIntersection"));
+    piece.nodes[1].id = piece.nodes[0].id.clone();
+    assert!(analyze(&piece).issues.iter().any(|i| i.message_key == "duplicateNode"));
+}

@@ -26,7 +26,25 @@ it('recovers six real paw pad instances including highlights rather than tracing
 it('recovers the continuous real inner ear without splitting its crease shadows into fabric colors',()=>{
  // Original-resolution crop (880,15,110,180), character-front-back.jpg.
  const {width,height,rgba}=fixture('ear'),result=illustrationRegions(width,height,rgba,true,'head'),pinks=result.regions.filter(r=>pigmentFamily(r.color)===1),inner=pinks.filter(r=>r.indices.length>500);
- expect(inner).toHaveLength(1);expect(inner[0].indices.length).toBeGreaterThan(3000);
+ expect(inner).toHaveLength(1);
+ // The former area minimum included the white fur tongue entering the ear.
+ // Bound retained pigment by independent original-color interiors instead.
+ const sourcePink=(i:number)=>{const r=rgba[i*4],g=rgba[i*4+1],b=rgba[i*4+2];return r-g>=35&&r-b>=30&&g<=b+15&&Math.max(r,g,b)>110;};
+ const sourceCore:number[]=[];
+ // Fixed original-image window inside the main ear, away from its outer ink
+ // edge and the white-fur tongue. It does not follow a fitted/source mask.
+ for(let y=25;y<=115;y++)for(let x=40;x<=70;x++){
+  let pigment=true;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(!sourcePink((y+dy)*width+x+dx))pigment=false;
+  if(pigment)sourceCore.push(y*width+x);
+ }
+ expect(sourceCore.length).toBeGreaterThan(1000);
+ const retained=new Set(inner[0].indices);expect(sourceCore.every(i=>retained.has(i))).toBe(true);
+ expect(inner[0].indices.length).toBeGreaterThanOrEqual(sourceCore.length);
+ for(const [x,y] of [[36,92],[38,92],[39,92],[40,92]]){
+  const i=y*width+x,rgb=[rgba[i*4],rgba[i*4+1],rgba[i*4+2]];
+  expect(Math.max(...rgb)-Math.min(...rgb)).toBeLessThan(20);expect(Math.max(...rgb)).toBeGreaterThan(240);
+  expect(retained.has(i)).toBe(false);
+ }
  expect(inner[0].indices.includes(34*width+43)).toBe(true);expect(inner[0].indices.includes(74*width+59)).toBe(true);expect(inner[0].indices.includes(100*width+76)).toBe(false);
  const raw=piece(width,height,inner[0].indices,inner[0].color),fit=smoothContour(raw,.8,()=>crypto.randomUUID());expect(safeContour(fit,raw,.8)).toBe(true);expect(fit.nodes.length).toBeLessThan(raw.nodes.length/2);
 });

@@ -1,7 +1,8 @@
-import {it,expect} from 'vitest';
+import {it,expect,vi} from 'vitest';
 import sharp from 'sharp';
 import {traceMask} from '../../apps/desktop/main/reference-segmentation';
-import {illustrationRegions} from '../../packages/reference/illustration';
+import {illustrationRegions,pigmentFamily,type IllustrationRegion} from '../../packages/reference/illustration';
+import * as imageEdges from '../../packages/reference/image-edge-evidence';
 import {smoothContour} from '../../packages/reference/smooth-contour';
 import {safeContour,contourBoundaryError} from '../../packages/reference/contour-topology';
 import type {Piece} from '../../packages/schema/index';
@@ -14,11 +15,36 @@ it('recovers a rasterized straight diamond without introducing any bowed edge',(
  expect(safeContour(result,raw,.8)).toBe(true);expect(contourBoundaryError(result,raw,.1,1)).toBeLessThanOrEqual(1);
 });
 it('the actual replacement character blue back diamond stays straight instead of rounded by extraction',async()=>{
- const width=733,height=1024,rgba=new Uint8Array(await sharp('tests/fixtures/character-blue-white-front-back.png').extract({left:803,top:0,width,height}).ensureAlpha().raw().toBuffer()),regions=illustrationRegions(width,height,rgba).regions,region=regions.find(r=>r.indices.includes(350*width+260))!;
- expect(region.indices).toHaveLength(1813);const mask=new Uint8Array(width*height);for(const i of region.indices)mask[i]=1;
- const raw=traceMask(width,height,mask,calibration(height),width,height,region.color,true).piece,result=smoothContour(raw,.8,()=>crypto.randomUUID());
- expect(bow(result),'the original blue diamond has four painted straight sides').toBeLessThan(1e-8);expect(result.nodes.length).toBeLessThanOrEqual(12);
- expect(safeContour(result,raw,.8)).toBe(true);expect(contourBoundaryError(result,raw,.1,1)).toBeLessThanOrEqual(1);
+ const width=733,height=1024,rgba=new Uint8Array(await sharp('tests/fixtures/character-blue-white-front-back.png').extract({left:803,top:0,width,height}).ensureAlpha().raw().toBuffer());
+ const interior=[[260,350],[250,350],[270,350],[260,335],[260,365]],exterior=[[220,350],[300,350],[260,300],[260,395]];
+ // These blue interior and dark exterior pixels are visible in the original
+ // PNG. Its antialiased border can change ownership without changing identity.
+ for(const [x,y]of interior){const i=(y*width+x)*4;expect(rgba[i+2]-rgba[i]).toBeGreaterThan(70);expect(rgba[i+1]-rgba[i]).toBeGreaterThan(40);}
+ for(const [x,y]of exterior)expect(Math.max(...rgba.subarray((y*width+x)*4,(y*width+x)*4+3))).toBeLessThan(80);
+ const identify=(regions:IllustrationRegion[])=>{
+  const region=regions.find(r=>r.indices.includes(350*width+260));expect(region).toBeDefined();
+  expect(pigmentFamily(region!.color)).toBe(4);
+  for(const [x,y]of interior)expect(regions.find(r=>r.indices.includes(y*width+x))).toBe(region);
+  for(const [x,y]of exterior)expect(region!.indices.includes(y*width+x)).toBe(false);
+  const xs=region!.indices.map(i=>i%width),ys=region!.indices.map(i=>Math.floor(i/width));
+  expect(Math.min(...xs)).toBeGreaterThan(230);expect(Math.max(...xs)).toBeLessThan(290);
+  expect(Math.min(...ys)).toBeGreaterThan(310);expect(Math.max(...ys)).toBeLessThan(400);
+  return region!;
+ };
+ let before:IllustrationRegion[]|undefined;
+ const refine=imageEdges.refineImageEdgeOwnership;
+ const observe=vi.spyOn(imageEdges,'refineImageEdgeOwnership').mockImplementation((w,h,pixels,input)=>{before=input;return refine(w,h,pixels,input);});
+ let regions:IllustrationRegion[];
+ try{regions=illustrationRegions(width,height,rgba).regions;}finally{observe.mockRestore();}
+ expect(before).toBeDefined();
+ // Apply the same identity and geometry oracle to the original classification
+ // and the image-supported result, without an exact border-pixel count.
+ for(const candidates of[before!,regions!]){
+  const region=identify(candidates),mask=new Uint8Array(width*height);for(const i of region.indices)mask[i]=1;
+  const raw=traceMask(width,height,mask,calibration(height),width,height,region.color,true).piece,result=smoothContour(raw,.8,()=>crypto.randomUUID());
+  expect(bow(result),'the original blue diamond has four painted straight sides').toBeLessThan(1e-8);expect(result.nodes.length).toBeLessThanOrEqual(12);
+  expect(safeContour(result,raw,.8)).toBe(true);expect(contourBoundaryError(result,raw,.1,1)).toBeLessThanOrEqual(1);
+ }
 });
 
 const cases=[.13,.3,.6,1,1.5,2.7].flatMap(slope=>[.05,1,10].map(scale=>({slope,scale})));
