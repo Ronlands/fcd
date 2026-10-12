@@ -14,6 +14,7 @@
 新增状态回归套件：
 
 - `topology-provenance.test.ts`：精确细分、推断依赖、审阅与锁定、输出门禁、撤销和文件往返。
+- `anatomy-inference-provenance.test.ts`：分类元数据变更保留有效推断依赖、既有审阅状态和失效依赖。
 - `material-history.test.ts`：历史裁切对材料的依赖、失败事务和历史恢复。
 - `fixtures/accepted-cut.ts`：无需原生求解即可构造的平面裁切快照；先按契约规范化，再计算哈希。
 

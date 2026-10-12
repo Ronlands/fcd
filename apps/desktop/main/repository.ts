@@ -10,6 +10,7 @@ import {assertModelDetach,assertSeamEdit,detachCutPaths,deleteMarking,saveActive
 import {referenceKey} from '../../../packages/reference/resources';
 import {trimPath,joinPaths,remapPathSeams} from '../../../packages/pattern/path-operations';
 import {splitProjectEdge} from './topology-edit';
+import {rebaseAnatomyInferences} from './anatomy-inference';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { projectSchema,surfaceSchema,parseProject, type Project, type Command } from '../../../packages/schema/index';
@@ -218,6 +219,7 @@ export class Repository {
         if(new Set(after.pieces.map(p=>p.id)).size!==after.pieces.length)throw new DomainError('DUPLICATE_ENTITY');
       }else if(command.type==='piece.put'){const i=after.pieces.findIndex(p=>p.id===command.piece.id);if(i<0)after.pieces.push(command.piece);else after.pieces[i]=command.piece;}else throw new DomainError('FORBIDDEN');
       for(const piece of after.pieces)if(piece.materialId){const material=after.materials?.find(m=>m.id===piece.materialId);if(!material)throw new DomainError('MATERIAL_MISSING');piece.material=material.name;}
+      if(command.type==='surface.anatomy')rebaseAnatomyInferences(before,after);
       saveActiveModel(after);
       if(['marking.put','marking.delete','marking.source.update','marking.review'].includes(command.type)){after.surfaceRun=undefined;after.previewMarkings=undefined;}
       after.revision++;after.updatedAt=new Date().toISOString();projectSchema.parse(after);
