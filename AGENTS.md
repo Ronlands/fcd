@@ -6,7 +6,7 @@
 
 - 当前维护源码直接位于仓库根目录，`apps/`、`packages/` 和 `crates/` 是并列目录。根目录 `package.json` 是应用配置，直接执行开发命令。
 - 根目录 `README.md` 面向使用者；本文件 `AGENTS.md` 是开发协作规则与规范索引入口，也用于自动发现项目规则。
-- Git 分支规范见 [BRANCH_CONVENTION.md](BRANCH_CONVENTION.md)。创建或命名工作分支时遵循类型前缀与简短英文描述；已有适用分支可继续使用。
+- Git 分支与提交规范见 [BRANCH_CONVENTION.md](BRANCH_CONVENTION.md)。创建或命名工作分支时遵循类型前缀与简短英文描述；已有适用分支可继续使用。提交标题必须带类型前缀，格式为 `type: 简体中文概述`，可选作用域格式为 `type(scope): 简体中文概述`。
 - 目录职责见 `Docs/guides/project-structure.md`；文档、测试与脚本索引分别位于各自目录的 `README.md`。
 - 在操作前检查 `git status`，保留已有修改。按任务范围改动，不顺手改写整个历史模块。
 
@@ -73,4 +73,4 @@ npm test -- tests/integration/topology-provenance.test.ts tests/integration/mate
 - `Docs/` 的现行指南与设计放入 `guides/`、`design/`，尚未落地但仍有价值的规划放入 `planning/` 并注明当前状态、待实现内容和未验证目标。保留未落地规划；删除已被现行文档替代的重复说明和过时实施记录，历史验收资料通过 Git 追溯。
 - 新生成的验证日志、截图和报告放入 `test-results/`，不直接写入文档目录。整理后运行 `npm run docs:check` 校验链接。
 - 导出给用户的能力、命令或目录发生变化时同步更新 README 与目录索引。
-- 如任务要求提交代码，使用简体中文提交信息，遵循 `.github/git-commit-instructions.md`。未要求提交时交付工作区修改及验证结果。
+- 如任务要求提交代码，遵循 [.github/git-commit-instructions.md](.github/git-commit-instructions.md)：标题类型前缀不可省略，冒号后有一个空格，概述使用简体中文；缺陷修复使用 `fix:` 或 `fix(scope):`。未要求提交时交付工作区修改及验证结果。
