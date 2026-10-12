@@ -6,7 +6,7 @@
 
 - 当前维护源码直接位于仓库根目录，`apps/`、`packages/` 和 `crates/` 是并列目录。根目录 `package.json` 是应用配置，直接执行开发命令。
 - 根目录 `README.md` 面向使用者；本文件 `AGENTS.md` 是唯一的开发协作规则文件，也用于自动发现项目规则。
-- 目录职责见 `Docs/project-structure.md`；文档、测试与脚本索引分别位于各自目录的 `README.md`。
+- 目录职责见 `Docs/guides/project-structure.md`；文档、测试与脚本索引分别位于各自目录的 `README.md`。
 - 在操作前检查 `git status`，保留已有修改。按任务范围改动，不顺手改写整个历史模块。
 
 ## 模块边界
@@ -69,6 +69,7 @@ npm test -- tests/integration/topology-provenance.test.ts tests/integration/mate
 - `.tools/` 是本地工具链与依赖，不作为旧程序残留删除。
 - `node_modules/`、`target/`、`target-*/`、`dist/`、`release/`、`.local/tests/`、`test-results/` 是本地依赖或生成内容，不能加入源码提交。
 - 清理脚本先运行 `-WhatIf`，检查实际目标和链接，并确认相关测试进程已关闭。保留用户库、固定测试样本、生产资源、发布包及已有验收记录。
-- 新文档使用清楚的主题文件名，并加入 `Docs/README.md` 索引。历史验收记录保留原有编号和路径。
+- `Docs/` 只维护当前有用的指南、架构、数据契约和算法说明，按 `guides/`、`design/` 分类并更新索引。删除已被源码或现行文档替代的重复说明和过时规划，不另建历史记录堆积目录；需要追溯时使用 Git 历史。
+- 新生成的验证日志、截图和报告放入 `test-results/`，不直接写入文档目录。整理后运行 `npm run docs:check` 校验链接。
 - 导出给用户的能力、命令或目录发生变化时同步更新 README 与目录索引。
 - 如任务要求提交代码，使用简体中文提交信息，遵循 `.github/git-commit-instructions.md`。未要求提交时交付工作区修改及验证结果。

@@ -1,7 +1,7 @@
 import {installedPath} from './dependencies.mjs';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync,writeFileSync,readFileSync } from 'node:fs';
-const version=JSON.parse(readFileSync('package.json','utf8')).version;const output=`Docs/软件工程文档/evidence/${version}`;mkdirSync(output,{recursive:true});const results=[];
+const version=JSON.parse(readFileSync('package.json','utf8')).version;const output=`test-results/evidence/${version}`;mkdirSync(output,{recursive:true});const results=[];
 for(const [id,args] of [
  ['typecheck',[installedPath('node_modules/vue-tsc/bin/vue-tsc.js'),'--noEmit']],
  ['vitest',['scripts/test-unit.mjs','--reporter=json',`--outputFile=${output}/vitest.json`]],

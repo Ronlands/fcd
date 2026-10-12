@@ -1,7 +1,7 @@
 """Read saved mask and fitted template archives independently of app code."""
 import json,hashlib,math,zipfile
 from pathlib import Path
-root=Path(__file__).resolve().parents[1];version=json.loads((root/'package.json').read_text())['version'];out=root/'Docs'/'软件工程文档'/'evidence'/version;out.mkdir(parents=True,exist_ok=True)
+root=Path(__file__).resolve().parents[1];version=json.loads((root/'package.json').read_text())['version'];out=root/'test-results'/'evidence'/version;out.mkdir(parents=True,exist_ok=True)
 def archive(suite):
     record=json.loads((root/'test-results'/f'{suite}-e2e.json').read_text());p=Path(record['directory'])/f'{suite}.fpcad'
     with zipfile.ZipFile(p) as z:

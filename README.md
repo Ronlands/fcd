@@ -182,7 +182,7 @@ npm run test:desktop
 
 ## 项目结构
 
-开发协作规则见 [AGENTS.md](AGENTS.md)，详细目录职责见 [项目结构与开发入口](Docs/project-structure.md)。[文档索引](Docs/README.md)、[测试索引](tests/README.md)和[脚本索引](scripts/README.md)提供按任务定位的入口。
+开发协作规则见 [AGENTS.md](AGENTS.md)，详细目录职责见 [项目结构与开发入口](Docs/guides/project-structure.md)。[文档索引](Docs/README.md)、[测试索引](tests/README.md)和[脚本索引](scripts/README.md)提供按任务定位的入口。
 
 ```text
 furrycad/
@@ -197,7 +197,7 @@ furrycad/
 ├── assets/                     # 字体、资源与第三方声明
 ├── scripts/                    # 构建、打包与验证脚本
 ├── tests/                      # 单元、集成与桌面工作流测试
-├── Docs/                       # 工程文档与验收记录
+├── Docs/                       # 当前开发、架构与算法说明
 ├── Cargo.toml                  # Rust 工作区
 ├── rust-toolchain.toml         # 固定 Rust 工具链
 ├── dist/                       # 应用构建产物（生成）
@@ -212,4 +212,4 @@ furrycad/
 - 旧项目中的花纹不会随升级自动重算；需要应用新的提取算法时，可使用“按当前标定重新拆分”，随后复核结果。
 - 当前发布脚本仅实现 Windows 打包，其他平台尚无对应发布流程。
 
-更多维护说明见 [应用指南](Docs/application-guide.md)，功能验收记录见 [花纹、裁切与拼接预览验收](Docs/软件工程文档/68-花纹裁切拼接修复验收.md)。第三方资源声明随发布包保存在 `THIRD_PARTY_NOTICES` 中。
+开发说明见 [项目结构](Docs/guides/project-structure.md)、[桌面架构](Docs/design/architecture.md)和[项目数据与契约](Docs/design/data-contracts.md)。第三方资源声明随发布包保存在 `THIRD_PARTY_NOTICES` 中。

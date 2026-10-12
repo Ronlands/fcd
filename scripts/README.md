@@ -14,9 +14,12 @@
 | 数据契约生成 | `generate-contracts.mjs` / `.ts` |
 | 字体与第三方资源声明 | `prepare-font.py`、`notices.mjs` |
 | 独立导出与制造校验 | `independent-*-check.py` |
-| 证据与追溯整理 | `collect-evidence.mjs`、`update-traceability.py` |
+| 收集当前验证证据与源码清单 | `collect-evidence.mjs` |
+| 文档链接校验 | `check-docs.mjs`，对应 `docs:check` |
 | 本地测试数据与发布目录维护 | `clear-test-data.ps1`、`prune-releases.ps1`；`clear-legacy-builds.ps1` 是发布包清理的兼容入口 |
 
 构建需要真实的 `target/release/fpcad-worker.exe`。打包脚本还需要安装完成的 Electron 运行时；仅执行 `npm ci --ignore-scripts` 不会下载该运行时。
 
 清理脚本先使用 `-WhatIf` 检查目标。`.local/workspace/`、已有 `.tools/`、回归样本、生产资源和需要保留的发布包具有不同用途，不能统一视为缓存删除。
+
+验证与独立校验的新报告写入 `test-results/evidence/`，发布清理报告写入 `test-results/release-cleanup.json`，不再向 `Docs/` 写入日志或截图。

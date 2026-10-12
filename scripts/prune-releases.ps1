@@ -39,6 +39,9 @@ foreach ($item in $plan) {
  }
 }
 $report = [pscustomobject]@{Time=(Get-Date).ToString('o'); Current=$current; Retained=$Keep; Packages=$plan}
-if (-not $WhatIfPreference) { $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $projectRoot 'Docs/软件工程文档/57-release-cleanup.json') -Encoding utf8 }
+if (-not $WhatIfPreference) {
+ New-Item -ItemType Directory -Path (Join-Path $projectRoot 'test-results') -Force | Out-Null
+ $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $projectRoot 'test-results/release-cleanup.json') -Encoding utf8
+}
 $plan | Group-Object Status | Select-Object Name,Count
 if ($plan | Where-Object Status -eq 'blocked') { throw 'Some legacy packages could not be removed. See 57-release-cleanup.json.' }

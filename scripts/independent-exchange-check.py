@@ -1,7 +1,7 @@
 """Independently read GLB headers/accessors and native-import manufacturing archive."""
 import json,struct,math,zipfile,hashlib,xml.etree.ElementTree as ET
 from pathlib import Path
-root=Path(__file__).resolve().parents[1];version=json.loads((root/'package.json').read_text())['version'];record=json.loads((root/'test-results/completion-e2e.json').read_text());folder=Path(record['directory']);out=root/'Docs'/'软件工程文档'/'evidence'/version
+root=Path(__file__).resolve().parents[1];version=json.loads((root/'package.json').read_text())['version'];record=json.loads((root/'test-results/completion-e2e.json').read_text());folder=Path(record['directory']);out=root/'test-results'/'evidence'/version
 
 def glb(path):
     data=path.read_bytes();magic,version,total=struct.unpack_from('<III',data);assert magic==0x46546c67 and version==2 and total==len(data)

@@ -6,7 +6,7 @@ from pypdf import PdfReader
 from pypdf.generic import ContentStream
 root=Path(__file__).resolve().parents[1]
 version=json.loads((root/'package.json').read_text(encoding='utf-8'))['version']
-evidence=root/'Docs'/'软件工程文档'/'evidence'/version
+evidence=root/'test-results'/'evidence'/version
 evidence.mkdir(exist_ok=True,parents=True)
 record=json.loads((root/'test-results/e2e.json').read_text(encoding='utf-8'))
 folder=Path(record['directory'])

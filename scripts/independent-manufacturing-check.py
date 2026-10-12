@@ -27,5 +27,5 @@ assert len(lines)==1;n=lines[0];assert ('90','2') in n and ('70','0') in n
 xs=[float(v) for k,v in n if k=='10'];ys=[float(v) for k,v in n if k=='20'];assert len(xs)==len(ys)==2
 d=math.hypot(xs[1]-xs[0],ys[1]-ys[0]);assert math.isclose(d,3,abs_tol=1e-7)
 report={'status':'passed','oracle':'xml.etree.ElementTree, pypdf and independent DXF group parser','notchDepthMm':d,'materialsAndProfilesRetained':True,'pdfChineseAndVariableLabels':True,'dxfUnit':'mm','physicalTest':'not executed','artifacts':{name:hashlib.sha256((folder/name).read_bytes()).hexdigest() for name in ['manufacturing.svg','manufacturing.pdf','manufacturing.dxf']}}
-version=json.loads((root/'package.json').read_text())['version'];out=root/'Docs'/'软件工程文档'/'evidence'/version
+version=json.loads((root/'package.json').read_text())['version'];out=root/'test-results'/'evidence'/version
 out.mkdir(parents=True,exist_ok=True);(out/'independent-manufacturing.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8');print(json.dumps(report,ensure_ascii=False,indent=2))

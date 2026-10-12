@@ -1,11 +1,11 @@
 import { mkdir,readdir,readFile,writeFile,copyFile,cp } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-const version=JSON.parse(await readFile('package.json','utf8')).version;const out=`Docs/软件工程文档/evidence/${version}`;await mkdir(out,{recursive:true});
+const version=JSON.parse(await readFile('package.json','utf8')).version;const out=`test-results/evidence/${version}`;await mkdir(out,{recursive:true});
 const sources=[];
-async function scan(root){for(const e of (await readdir(root,{withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))){const path=join(root,e.name);if(e.isDirectory())await scan(path);else sources.push({path:path.replaceAll('\\','/'),sha256:createHash('sha256').update(await readFile(path)).digest('hex')});}}
-for(const root of ['apps','packages','crates','scripts','tests','assets'])await scan(root);
-for(const path of ['README.md','Docs/软件工程文档/00-文档总览与使用指南.md','Docs/软件工程文档/01-prd.md','Docs/软件工程文档/23-需求追踪矩阵.md','Docs/软件工程文档/traceability.csv','Docs/软件工程文档/35-离线增量0.2与剩余工作.md','Docs/软件工程文档/36-离线0.3模板展开花纹与轮廓排料.md','Docs/软件工程文档/37-离线0.4材料与变宽缝份.md','Docs/软件工程文档/38-离线0.5手工Mask与自定义模板.md','Docs/软件工程文档/39-离线0.6交换格式与路径编辑.md','Docs/软件工程文档/40-左右预览布局.md','Docs/软件工程文档/41-离线0.7大模型与颜色曲线.md','Docs/软件工程文档/42-离线0.7.1工作区交互整理.md','Docs/软件工程文档/43-离线0.8功能核对与图像纹理链.md','Docs/软件工程文档/44-用户角色图双视图测试与修复.md','package.json','package-lock.json','Cargo.toml','Cargo.lock','rust-toolchain.toml','tsconfig.json','vite.config.ts','vitest.config.ts'])sources.push({path,sha256:createHash('sha256').update(await readFile(path)).digest('hex')});
+async function scan(root){for(const e of (await readdir(root,{withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))){if(e.name==='__pycache__')continue;const path=join(root,e.name);if(e.isDirectory())await scan(path);else sources.push({path:path.replaceAll('\\','/'),sha256:createHash('sha256').update(await readFile(path)).digest('hex')});}}
+for(const root of ['apps','packages','crates','scripts','tests','assets','Docs'])await scan(root);
+for(const path of ['README.md','AGENTS.md','package.json','package-lock.json','Cargo.toml','Cargo.lock','rust-toolchain.toml','tsconfig.json','vite.config.ts','vitest.config.ts'])sources.push({path,sha256:createHash('sha256').update(await readFile(path)).digest('hex')});
 await writeFile(out+'/source-manifest.json',JSON.stringify({recordedAt:new Date().toISOString(),gitCommit:null,sources},null,2));
 const e2e=JSON.parse(await readFile('test-results/e2e.json','utf8'));await copyFile('test-results/e2e.json',out+'/e2e.json');await copyFile('test-results/workspace.png',out+'/workspace.png');
 for(const name of ['output.svg','output.pdf','output.png','测试.fpcad'])await copyFile(join(e2e.directory,name),join(out,name));

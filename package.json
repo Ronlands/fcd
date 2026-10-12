@@ -10,6 +10,7 @@
     "build": "node scripts/build.mjs",
     "build:rust": "node scripts/cargo.mjs build --release --locked",
     "typecheck": "vue-tsc --noEmit",
+    "docs:check": "node scripts/check-docs.mjs",
     "test": "node scripts/test-unit.mjs",
     "test:rust": "node scripts/cargo.mjs test --workspace --locked",
     "test:e2e": "node tests/e2e.mjs",

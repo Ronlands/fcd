@@ -11,7 +11,7 @@ import {resolve} from 'node:path';
 import upng from '@pdf-lib/upng';
 const {encode}=upng.default??upng;
 const directory=await mkdtemp(resolve('.local/tests/workflow-')),build=testedBuild,env={...process.env,FPCAD_DATA_DIR:directory};delete env.ELECTRON_RUN_AS_NODE;
-const evidenceDir='Docs/软件工程文档/evidence/0.8.0';await mkdir(evidenceDir,{recursive:true});
+const evidenceDir='test-results/evidence/0.8.0';await mkdir(evidenceDir,{recursive:true});
 const evidence={build,directory,passed:false,osSandboxDisabledForTest:process.env.FPCAD_TEST_NO_SANDBOX==='1',checks:[]},errors=[];
 const app=await electron.launch({executablePath,args:desktopArgs,env}),page=await app.firstWindow();
 page.on('pageerror',e=>errors.push(e.message));
