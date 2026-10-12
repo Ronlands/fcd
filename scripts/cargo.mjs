@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-const roots=[resolve('.tools'),resolve('../.tools')],runtime=roots.find(root=>existsSync(resolve(root,'cargo/bin/cargo.exe')));
+const roots=[resolve('.tools')],runtime=roots.find(root=>existsSync(resolve(root,'cargo/bin/cargo.exe')));
 const local = runtime?resolve(runtime,'cargo/bin/cargo.exe'):'';
 const env = {...process.env};
 if (runtime) { env.CARGO_HOME=resolve(runtime,'cargo'); env.RUSTUP_HOME=resolve(runtime,'rustup'); }

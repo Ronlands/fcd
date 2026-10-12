@@ -2,24 +2,24 @@
 param([switch]$IncludeLegacyProfile, [string[]]$ExcludePath = @(), [switch]$GeneratedOnly, [switch]$IncludeLegacyGenerated)
 # Run only after verification has finished and FurryPattern CAD is closed.
 $ErrorActionPreference = 'Stop'
-$taskRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..')).TrimEnd('\')
+$taskRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\')
 $legacyProfile = [IO.Path]::GetFullPath((Join-Path $env:APPDATA 'FurryPatternCAD'))
 # Safe by default: never infer that the user's workspace is test data.
-$targets = @('workflow-update\.local\tests','workflow-update\.local\auto-reference-fixture.json','workflow-update\.local\npm-cache','workflow-update\.local\electron-cache','workflow-update\.local\dependency-audit-before.json','workflow-update\target\debug','workflow-update\test-results','workflow-update\Docs\软件工程文档\evidence') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $taskRoot $_)) }
+$targets = @('.local\tests','.local\auto-reference-fixture.json','.local\npm-cache','.local\electron-cache','.local\dependency-audit-before.json','target\debug','test-results','Docs\软件工程文档\evidence') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $taskRoot $_)) }
 if ($GeneratedOnly -and $IncludeLegacyProfile) { throw 'GeneratedOnly cannot include a user profile.' }
-$targets += @('workflow-update\.local\runtime-probe.mjs','workflow-update\.local\write-final-audit.mjs') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $taskRoot $_)) }
-$targets += @('workflow-update\.local\contour-evidence','workflow-update\.local\contour-debug.ts','workflow-update\.local\contour-evidence.mjs','workflow-update\.local\contour-evidence.ts','workflow-update\.local\cut-resume-build.mjs','workflow-update\.local\cut-resume-debug.mjs','workflow-update\.local\cut-resume-debug.ts','workflow-update\.local\cut-resume-project.json') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $taskRoot $_)) }
+$targets += @('.local\runtime-probe.mjs','.local\write-final-audit.mjs') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $taskRoot $_)) }
+$targets += @('.local\contour-evidence','.local\contour-debug.ts','.local\contour-evidence.mjs','.local\contour-evidence.ts','.local\cut-resume-build.mjs','.local\cut-resume-debug.mjs','.local\cut-resume-debug.ts','.local\cut-resume-project.json') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $taskRoot $_)) }
 if ($IncludeLegacyGenerated) {
  $targets += @('.local\tests','.local\performance-fixture','.local\audit-original','test-results','Docs\软件工程文档\evidence') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $taskRoot $_)) }
 }
-$targets += @('workflow-update\.local\pigment-evidence','workflow-update\.local\illustration-before-pastel.ts','workflow-update\.local\pigment-evidence.mjs','workflow-update\.local\pigment-evidence.ts','workflow-update\.local\pigment-fixtures.mjs','workflow-update\.local\pigment-whole.mjs','workflow-update\.local\pigment-whole.ts') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $taskRoot $_)) }
+$targets += @('.local\pigment-evidence','.local\illustration-before-pastel.ts','.local\pigment-evidence.mjs','.local\pigment-evidence.ts','.local\pigment-fixtures.mjs','.local\pigment-whole.mjs','.local\pigment-whole.ts') | ForEach-Object { [IO.Path]::GetFullPath((Join-Path $taskRoot $_)) }
 if ($IncludeLegacyProfile) { $targets += $legacyProfile }
 $excluded = @($ExcludePath | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })
 foreach ($path in $excluded) {
  if ($path -notin $targets) { throw "Excluded path is not a cleanup target: $path" }
  Write-Output "Explicitly excluded: $path"
 }
-$targets = @($targets | Where-Object { $_ -notin $excluded })
+$targets = @($targets | Where-Object { $_ -notin $excluded } | Select-Object -Unique)
 $inventory = @()
 # Validate all paths, links and database locks before deleting any data.
 foreach ($target in $targets) {

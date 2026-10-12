@@ -19,7 +19,7 @@ export async function collectNotices(output){
  for(const name of Object.keys(lock.packages[''].dependencies))visit(name);
  for(const [path,p] of Object.entries(lock.packages)){if(path&&included.has(path)){const name=p.name??path.split('node_modules/').at(-1);const source=name==='@nodable/entities'?'assets/notices/nodable-entities':name==='@pdf-lib/fontkit'?'assets/notices/fontkit':name==='@resvg/resvg-wasm'?'assets/notices/resvg-wasm':installedPath(path);await copy(source,name,p.version,p.license??'UNDECLARED');}}
  await copy('assets/fonts','FurryPatternSansSC','Fontsource-5.3.0','OFL-1.1');
- const vendor=['.tools/vendor','../.tools/vendor'].find(existsSync);if(!vendor)throw Error('Missing Rust dependency attribution directory');
+ const vendor=['.tools/vendor'].find(existsSync);if(!vendor)throw Error('Missing Rust dependency attribution directory');
  for(const entry of await readdir(vendor,{withFileTypes:true})){if(!entry.isDirectory())continue;const path=join(vendor,entry.name),toml=await readFile(join(path,'Cargo.toml'),'utf8');await copy(path,`rust-${entry.name}`,toml.match(/^version = "([^"]+)"/m)?.[1],toml.match(/^license = "([^"]+)"/m)?.[1]??'UNDECLARED');}
  await writeFile(join(output,'inventory.json'),JSON.stringify({status:'attribution inventory; formal release review remains pending',dependencies:records},null,2));
 }

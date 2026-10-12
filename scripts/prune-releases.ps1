@@ -1,6 +1,7 @@
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param([string[]]$Keep = @(), [switch]$IncludeLegacy)
 $ErrorActionPreference = 'Stop'
+if ($IncludeLegacy) { throw 'IncludeLegacy is no longer supported: cleanup is limited to this repository release directory.' }
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\')
 $latest = Get-Content -LiteralPath (Join-Path $projectRoot 'release/latest.json') -Raw | ConvertFrom-Json
 $current = [IO.Path]::GetFullPath($latest.directory).TrimEnd('\')
@@ -11,7 +12,6 @@ $build = Get-Content -LiteralPath (Join-Path $current 'BUILD.json') -Raw | Conve
 if ($build.buildHash -ne $latest.buildHash) { throw 'Latest package manifest does not match.' }
 foreach ($name in $Keep) { if ($name -notmatch '^FurryPatternCAD-[0-9.]+-win-x64-[0-9a-f]{8}$') { throw 'Invalid retained package name.' } }
 $roots = @($releaseRoot)
-if ($IncludeLegacy) { $roots += Join-Path ([IO.Path]::GetDirectoryName($projectRoot)) 'release' }
 $plan = @()
 foreach ($releasePath in $roots) {
  if (-not (Test-Path -LiteralPath $releasePath)) { continue }
