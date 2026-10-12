@@ -12,6 +12,7 @@ import {trimPath,joinPaths,remapPathSeams} from '../../../packages/pattern/path-
 import {splitProjectEdge} from './topology-edit';
 import {rebaseAnatomyInferences} from './anatomy-inference';
 import {applyModelAnatomy} from './model-anatomy';
+import {cutCandidateInputHash} from './cut-candidate';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { projectSchema,surfaceSchema,parseProject, type Project, type Command } from '../../../packages/schema/index';
@@ -195,8 +196,8 @@ export class Repository {
 
       else if(command.type==='cutting.activate')activateCut(after,command.entryId);
       else if(command.type==='cutting.delete'){if(after.activeCutId===command.entryId)throw new DomainError('CUT_LIBRARY_ACTIVE');if([...(after.markings??[]),...(after.modelLibrary??[]).flatMap(model=>model.markings??[])].some(m=>m.source==='cut-library'&&m.cutLibraryId===command.entryId))throw new DomainError('CUT_LIBRARY_DEPENDENCY');if(!after.cuttingLibrary?.some(e=>e.id===command.entryId))throw new DomainError('ENTITY_MISSING');after.cuttingLibrary=after.cuttingLibrary.filter(e=>e.id!==command.entryId);if(after.activeCutId===command.entryId)after.activeCutId=undefined;}
-      else if(command.type==='unwrap.candidate'){after.surfaceRun=command.run;after.previewMarkings=command.markings;}
-      else if(command.type==='unwrap.accept'){const run=after.surfaceRun;if(!run||run.accepted||!after.surface||run.sourceHash!==hash(JSON.stringify(after.surface)))throw new DomainError('STALE_RESULT');const candidateMarkings=after.previewMarkings??after.markings??[];if(candidateMarkings.some(m=>m.placement&&!m.placement.reviewed))throw new DomainError('AUTOMATIC_PLACEMENT_REVIEW');if(candidateMarkings.some(m=>m.inference&&!m.inference.reviewed))throw new DomainError('INFERRED_MARKING_REVIEW');const removed=new Set(after.bindings?.filter(b=>b.surfaceId===after.surface!.id).map(b=>b.pieceId));
+      else if(command.type==='unwrap.candidate'){after.surfaceRun={...command.run,inputHash:cutCandidateInputHash(after)};after.previewMarkings=command.markings;}
+      else if(command.type==='unwrap.accept'){const run=after.surfaceRun;if(!run||run.accepted||!after.surface||run.sourceHash!==hash(JSON.stringify(after.surface))||run.inputHash!==cutCandidateInputHash(after))throw new DomainError('STALE_RESULT');const candidateMarkings=after.previewMarkings??after.markings??[];if(candidateMarkings.some(m=>m.placement&&!m.placement.reviewed))throw new DomainError('AUTOMATIC_PLACEMENT_REVIEW');if(candidateMarkings.some(m=>m.inference&&!m.inference.reviewed))throw new DomainError('INFERRED_MARKING_REVIEW');const removed=new Set(after.bindings?.filter(b=>b.surfaceId===after.surface!.id).map(b=>b.pieceId));
         if(after.seams?.some(s=>removed.has(s.a.pieceId)||removed.has(s.b.pieceId)))throw new DomainError('SEAM_DEPENDENCY');
         if(after.markings?.some(m=>m.locked&&m.paths.some(path=>removed.has(path.pieceId))))throw new DomainError('MARKING_LOCKED');
         after.pieces=after.pieces.filter(p=>!removed.has(p.id));after.seams=after.seams?.filter(s=>!removed.has(s.a.pieceId)&&!removed.has(s.b.pieceId));

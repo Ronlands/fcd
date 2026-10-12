@@ -1944,6 +1944,10 @@
           "run": {
             "type": "object",
             "properties": {
+              "inputHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
               "designCutReport": {
                 "type": "object",
                 "properties": {
@@ -10111,6 +10115,10 @@
     "surfaceRun": {
       "type": "object",
       "properties": {
+        "inputHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
         "designCutReport": {
           "type": "object",
           "properties": {
