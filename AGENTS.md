@@ -5,7 +5,8 @@
 这是面向兽装花纹、三维映射和二维纸样制作的 Windows 桌面 CAD。主要技术栈为 Electron、Vue 3、TypeScript、Pinia、SQLite 和 Rust。
 
 - 当前维护源码直接位于仓库根目录，`apps/`、`packages/` 和 `crates/` 是并列目录。根目录 `package.json` 是应用配置，直接执行开发命令。
-- 根目录 `README.md` 面向使用者；本文件 `AGENTS.md` 是唯一的开发协作规则文件，也用于自动发现项目规则。
+- 根目录 `README.md` 面向使用者；本文件 `AGENTS.md` 是开发协作规则与规范索引入口，也用于自动发现项目规则。
+- Git 分支规范见 [BRANCH_CONVENTION.md](BRANCH_CONVENTION.md)。创建或命名工作分支时遵循类型前缀与简短英文描述；已有适用分支可继续使用。
 - 目录职责见 `Docs/guides/project-structure.md`；文档、测试与脚本索引分别位于各自目录的 `README.md`。
 - 在操作前检查 `git status`，保留已有修改。按任务范围改动，不顺手改写整个历史模块。
 
