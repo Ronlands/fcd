@@ -182,7 +182,7 @@ function shortSpanDirection(span: Point[], curve: Curve, g: Grid) {
  * can constrain a genuine arc to the wrong direction; independent least
  * squares controls avoid that bias. Endpoints remain exact, and no continuity,
  * curvature energy or aesthetic smoothness term enters this fit. */
-function geometricCubic(span: Point[], g: Grid, createId: () => string, requireCurvedCore = true): Curve | undefined {
+function geometricCubic(span: Point[], g: Grid, createId: () => string, requireCurvedCore = true, refine = false): Curve | undefined {
     if (span.length < 5) return;
     const a = span[0], b = span.at(-1)!, d = length(a, b);
     if (d < g.size * 4) return;
@@ -191,6 +191,7 @@ function geometricCubic(span: Point[], g: Grid, createId: () => string, requireC
     const core = span.filter((_, i) => arc[i] > g.size * 2 && arc.at(-1)! - arc[i] > g.size * 2);
     if (requireCurvedCore && core.length >= 3 && straight(core, g)) return;
     const parameters = arc.map(t => t / arc.at(-1)!);
+    let best:Curve|undefined,bestError=Infinity;
     for (let iteration = 0; iteration < 12; iteration++) {
         let aa = 0, ab = 0, bb = 0, ax = 0, bx = 0, ay = 0, by = 0;
         for (let i = 1; i + 1 < span.length; i++) {
@@ -200,16 +201,20 @@ function geometricCubic(span: Point[], g: Grid, createId: () => string, requireC
             ax += b1 * rx; bx += b2 * rx; ay += b1 * ry; by += b2 * ry;
         }
         const det = aa * bb - ab * ab;
-        if (det <= 1e-12) return;
+        if (det <= 1e-12) return best;
         const c1 = { id: createId(), xMm: (ax * bb - bx * ab) / det, yMm: (ay * bb - by * ab) / det };
         const c2 = { id: createId(), xMm: (bx * aa - ax * ab) / det, yMm: (by * aa - ay * ab) / det };
-        if (length(a, c1) > d * 1.5 || length(b, c2) > d * 1.5) return;
+        if (length(a, c1) > d * 1.5 || length(b, c2) > d * 1.5) return best;
         const c: Curve = { id: createId(), startNodeId: a.id, endNodeId: b.id, c1, c2 };
         try {
             const sampled = flatten(a, c1, c2, b, g.size * .01, createId);
             // .1-pixel sampling contributes .05; flattening contributes .01.
-            if (shortSpanDirection(span, c, g) && Math.max(spanError(span, sampled, g.size, g.size * .1), spanError(sampled, span, g.size, g.size * .1)) + g.size * .06 <= g.size * 1.05) return c;
-        } catch { return; }
+            const error=Math.max(spanError(span, sampled, g.size, g.size * .1), spanError(sampled, span, g.size, g.size * .1)) + g.size * .06;
+            if (shortSpanDirection(span,c,g)&&error<=g.size*1.05){
+                if(!refine)return c;
+                if(error<bestError){best=c;bestError=error;}
+            }
+        } catch { return best; }
         const p = [a, c1, c2, b], next = [...parameters];
         for (let j = 1; j + 1 < span.length; j++) {
             const t = parameters[j], s = 1 - t, B = [s * s * s, 3 * t * s * s, 3 * t * t * s, t * t * t];
@@ -221,6 +226,7 @@ function geometricCubic(span: Point[], g: Grid, createId: () => string, requireC
         }
         parameters.splice(0, parameters.length, ...next);
     }
+    return best;
 }
 
 function ring(points: Point[], pixel: number, createId: () => string, allowCurves: boolean, boundaryCorner = false, retainCorners = false, forced:ReadonlySet<string>=new Set(), openChain = false) {
@@ -485,6 +491,39 @@ function ring(points: Point[], pixel: number, createId: () => string, allowCurve
         consolidate(false, new Map(nodes.map(p => [p.id, p])));
         nodes = place();
     }
+    if (allowCurves && openChain) {
+        // Independent fits can strand a one/two-cell straight step between
+        // measured arcs. It is not a corner when the source corner detector
+        // and junction graph both left its endpoints free. Refit those arcs
+        // around the middle of the original step, retaining the remaining
+        // raster samples when a longer continuation cannot be fitted.
+        // Every owner still checks the complete source boundary and area.
+        for (let i = 1; i + 1 < segments.length; i++) {
+            const previous = segments[i - 1], step = segments[i], next = segments[i + 1];
+            if (!previous.curve || step.curve || !next.curve ||
+                [step.a, step.b].some(p => fixed.has(p.id) || forced.has(p.id) || bevel(p)) ||
+                length(step.a, step.b) > g.size * 2 + g.size * 1e-7) continue;
+            const start = lookup.get(previous.a.id)!, middle = lookup.get(step.a.id)!, end = lookup.get(next.b.id)!;
+            if (start >= middle || middle >= end) continue;
+            const join = { ...step.a, xMm: (step.a.xMm + step.b.xMm) / 2, yMm: (step.a.yMm + step.b.yMm) / 2 };
+            const left = points.slice(start, middle + 1);
+            left[0] = nodes[i - 1]; left[left.length - 1] = join;
+            const incoming = cubic(left, false) ?? geometricCubic(left, g, createId, false, true);
+            if (!incoming) continue;
+            const right = points.slice(middle, end + 1);
+            right[0] = join; right[right.length - 1] = nodes[i + 2];
+            for (let stop = right.length - 1; stop >= 4; stop--) {
+                const prefix = right.slice(0, stop + 1), outgoing = cubic(prefix, false);
+                if (!outgoing) continue;
+                const replacements:Segment[] = [{ a: previous.a, b: join, curve: incoming }, { a: join, b: prefix.at(-1)!, curve: outgoing }];
+                for (let k = stop; k + 1 < right.length; k++) replacements.push({ a: right[k], b: right[k + 1] });
+                recoveredAnchors.set(join.id, join);
+                segments.splice(i - 1, 3, ...replacements);
+                nodes = place();
+                break;
+            }
+        }
+    }
     let curves = segments.flatMap(s => s.curve ? [s.curve] : []);
     if (nodes.length === 2 && curves.length) {
         // Two fitted arcs can describe a valid closed loop, while the editable
@@ -621,6 +660,18 @@ export function recoverContour(piece: Piece, pixelMm: number, createId: () => st
  * The distant closing scaffold only reuses the existing digital line/arc fitter;
  * it is discarded and is never a source contour or area constraint. */
 export function recoverBoundaryChain(points:Point[],pixelMm:number,createId:()=>string){
+ if(points.length<3)return {nodes:points,curves:[] as Curve[]};
+ if(!Number.isFinite(pixelMm)||pixelMm<=0)throw Error('INVALID_CALIBRATION');
+ // Fit in native raster coordinates: rotated/calibrated roundoff must not
+ // choose a different split for the same measured boundary. Only numerical
+ // noise at exact grid stations is snapped; native contact bevels stay intact.
+ const origin=points[0],basis=grid(points,pixelMm),snap=(v:number)=>Math.abs(v-Math.round(v))<1e-7?Math.round(v):v;
+ const local=points.map(p=>{const x=p.xMm-origin.xMm,y=p.yMm-origin.yMm;return {...p,xMm:snap((x*basis.ux+y*basis.uy)/basis.size),yMm:snap((-x*basis.uy+y*basis.ux)/basis.size)};});
+ const fit=recoverBoundaryChainLocal(local,pixelMm/basis.size,createId);
+ const world=(p:Point)=>({...p,xMm:origin.xMm+basis.size*(p.xMm*basis.ux-p.yMm*basis.uy),yMm:origin.yMm+basis.size*(p.xMm*basis.uy+p.yMm*basis.ux)});
+ return {nodes:fit.nodes.map(p=>p.id===points[0].id?points[0]:p.id===points.at(-1)!.id?points.at(-1)!:world(p)),curves:fit.curves.map(c=>({...c,c1:world(c.c1),c2:world(c.c2)}))};
+}
+function recoverBoundaryChainLocal(points:Point[],pixelMm:number,createId:()=>string){
  if(points.length<3)return {nodes:points,curves:[] as Curve[]};
  const origin=points[0],local=points.map(p=>({...p,xMm:p.xMm-origin.xMm,yMm:p.yMm-origin.yMm})),a=local[0],b=local.at(-1)!,d=length(a,b),reach=Math.max(pixelMm*20,...local.map(p=>length(a,p)))*3;
  if(d<1e-12)return {nodes:points,curves:[] as Curve[]};

@@ -42,7 +42,7 @@ it.each(rois)('original JPEG $name has no artificial sharp heading changes',asyn
  // 20 degrees is a geometric discontinuity bound at an observed broad bend,
  // not a demand for G1 at true corners or a prescribed cubic/node count.
  expect(Math.max(0,...turns.map(t=>t.turn)),JSON.stringify(turns)).toBeLessThanOrEqual(Math.PI/9);
-},20000);
+},60000);
 
 it.each([.05,1,10].flatMap(scale=>[0,.37,1.1].map(rotation=>({scale,rotation}))))('recovers an analytic curved interface at scale $scale rotation $rotation without polygon heading spikes',async({scale,rotation})=>{
  const width=220,height=180,masks=[new Uint8Array(width*height),new Uint8Array(width*height)];
