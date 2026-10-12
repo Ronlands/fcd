@@ -1,10 +1,10 @@
 # FurryPattern CAD
 
-当前维护目录为 `workflow-update`。导航顺序：**使用指南 → 花纹提取 → 模型管理 → 花纹映射 → 裁切版型 → 拼接预览 → 制版**。本版本仍为离线开发预览，本轮实施和验收状态见 [花纹、裁切与拼接预览验收](Docs/软件工程文档/68-花纹裁切拼接修复验收.md)。
+应用直接在仓库根目录维护。导航顺序：**使用指南 → 花纹提取 → 模型管理 → 花纹映射 → 裁切版型 → 拼接预览 → 制版**。本版本仍为离线开发预览，本轮实施和验收状态见 [花纹、裁切与拼接预览验收](软件工程文档/68-花纹裁切拼接修复验收.md)。
 
 ## 启动
 
-双击父目录的 `启动新版FurryCAD.cmd`，或在本目录运行 `npm start`。开发启动默认使用本目录 `.local/workspace`，已有项目保存在这里；不要当作测试数据删除。根目录 npm 命令已统一转发到当前维护目录。启动脚本读取最新发布包。
+双击仓库根目录的 `启动新版FurryCAD.cmd` 启动最新发布包，或在仓库根目录运行 `npm start` 启动已构建源码应用。开发启动默认使用根目录 `.local/workspace`，已有项目保存在这里；不要当作测试数据删除。
 
 可分发程序位置由 `release/latest.json` 指定。复制整个对应发布目录，不能只复制 EXE。发布包默认使用应用自己的用户数据目录；通过“打开项目”载入 `.fpcad`。源码目录不是发布包。
 
@@ -28,6 +28,8 @@
 
 ## 开发与验证
 
+目录职责见 [项目结构与开发入口](project-structure.md)；开发规则见 [AGENTS.md](../AGENTS.md)。查找专项文档、测试和维护脚本时使用 [文档索引](README.md)、[测试索引](../tests/README.md)和[脚本索引](../scripts/README.md)。以下命令均在仓库根目录执行。
+
 ```powershell
 npm ci
 npm run build:rust
@@ -37,7 +39,7 @@ $env:FPCAD_TEST_EXECUTABLE=(Get-Content release/latest.json -Raw | ConvertFrom-J
 npm run test:desktop
 ```
 
-`test:build` 检查旧资源清除和重复打包，并产生发布目录。桌面套件包含独立的首次启动检查，全部使用隔离数据和隐藏窗口。可用 `npm run test:desktop -- --jobs 3` 并行运行，依赖前置样本的套件会等待样本生成。仅在受限测试环境确有需要时设置 `FPCAD_TEST_NO_SANDBOX=1`；这不修改生产沙箱。Rust 工具和离线依赖可使用本目录或父目录 `.tools`。父目录 `.tools` 提供当前 Rust 工具链和离线依赖，需要保留。
+`test:build` 检查旧资源清除和重复打包，并产生发布目录。桌面套件包含独立的首次启动检查，全部使用隔离数据和隐藏窗口。可用 `npm run test:desktop -- --jobs 3` 并行运行，依赖前置样本的套件会等待样本生成。仅在受限测试环境确有需要时设置 `FPCAD_TEST_NO_SANDBOX=1`；这不修改生产沙箱。Rust 工具和离线依赖可使用根目录 `.tools`，需要保留。
 
 最终审计摘要保留在 `Docs/软件工程文档/68-final-audit.json`，本轮视觉对照保留在 `Docs/软件工程文档/68-visual-checks`，最终验证日志保留在 `Docs/软件工程文档/68-verification`。临时测试项目和中间输出在 `test-results`、`.local/tests` 和文档 `evidence`，清理后不再存在。
 
