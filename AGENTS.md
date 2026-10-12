@@ -69,7 +69,7 @@ npm test -- tests/integration/topology-provenance.test.ts tests/integration/mate
 - `.tools/` 是本地工具链与依赖，不作为旧程序残留删除。
 - `node_modules/`、`target/`、`target-*/`、`dist/`、`release/`、`.local/tests/`、`test-results/` 是本地依赖或生成内容，不能加入源码提交。
 - 清理脚本先运行 `-WhatIf`，检查实际目标和链接，并确认相关测试进程已关闭。保留用户库、固定测试样本、生产资源、发布包及已有验收记录。
-- `Docs/` 只维护当前有用的指南、架构、数据契约和算法说明，按 `guides/`、`design/` 分类并更新索引。删除已被源码或现行文档替代的重复说明和过时规划，不另建历史记录堆积目录；需要追溯时使用 Git 历史。
+- `Docs/` 的现行指南与设计放入 `guides/`、`design/`，尚未落地但仍有价值的规划放入 `planning/` 并注明当前状态、待实现内容和未验证目标。保留未落地规划；删除已被现行文档替代的重复说明和过时实施记录，历史验收资料通过 Git 追溯。
 - 新生成的验证日志、截图和报告放入 `test-results/`，不直接写入文档目录。整理后运行 `npm run docs:check` 校验链接。
 - 导出给用户的能力、命令或目录发生变化时同步更新 README 与目录索引。
 - 如任务要求提交代码，使用简体中文提交信息，遵循 `.github/git-commit-instructions.md`。未要求提交时交付工作区修改及验证结果。

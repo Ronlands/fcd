@@ -56,6 +56,7 @@ fcd/
 | `.local/tests/`、`test-results/` | 隔离测试数据与输出 | 不提交；按维护脚本清理 |
 | `tests/fixtures/`、`assets/` | 回归样本与生产资源 | 属于源码，保持引用和许可证完整 |
 | `Docs/guides/`、`Docs/design/` | 使用指南、开发入口和算法设计 | 维护当前说明 |
+| `Docs/planning/` | 尚未落地的功能与技术规划 | 标明状态，不作为已实现能力 |
 | `test-results/evidence/` | 新生成的验证证据 | 本地生成，不提交 |
 
 应用直接在仓库根目录维护，本地工具链位于 `.tools/`。根目录 README 是统一入门文档，`Docs/` 保留当前开发和算法说明，历史记录通过 Git 追溯。
