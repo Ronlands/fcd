@@ -8,3 +8,5 @@ release/
 test-results/
 __pycache__/
 *.py[cod]
+/.idea
+/.codex
