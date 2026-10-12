@@ -11,6 +11,7 @@ import {referenceKey} from '../../../packages/reference/resources';
 import {trimPath,joinPaths,remapPathSeams} from '../../../packages/pattern/path-operations';
 import {splitProjectEdge} from './topology-edit';
 import {rebaseAnatomyInferences} from './anatomy-inference';
+import {applyModelAnatomy} from './model-anatomy';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import { projectSchema,surfaceSchema,parseProject, type Project, type Command } from '../../../packages/schema/index';
@@ -124,7 +125,7 @@ export class Repository {
         pruneSources([command.pieceId]);after.surfaceRun=undefined;after.previewMarkings=undefined;
       }else if(command.type==='markings.batch'){after.markings=[...(after.markings??[]).filter(m=>!command.markings.some(n=>n.id===m.id)),...command.markings];after.surfaceRun=undefined;after.previewMarkings=undefined;}
       else if(command.type==='marking.placement.review'){if(command.markingIds.some(id=>!after.markings?.some(m=>m.id===id&&m.placement)))throw new DomainError('ENTITY_MISSING');for(const m of after.markings??[])if(command.markingIds.includes(m.id)){if(m.locked)throw new DomainError('MARKING_LOCKED');if(command.reviewed&&!(m.source==='cut-library'?archivedPlacementMatches(after,m)&&!staleMarkingIds(after).has(m.id):placementMatchesModel(after,m)))throw new DomainError('STALE_PLACEMENT');m.placement!.reviewed=command.reviewed;}after.surfaceRun=undefined;after.previewMarkings=undefined;}
-      else if(command.type==='surface.anatomy'){if(!after.surface)throw new DomainError('SURFACE_MISSING');if(command.faceRegions){const names=new Map(command.faceRegions.map(f=>[f.faceId,f.region]));after.surface.faces=after.surface.faces.map(f=>({...f,region:names.get(f.id)??f.region}));}after.surface=surfaceSchema.parse({...after.surface,partAssignments:command.assignments});const digest=hash(JSON.stringify(after.surface));for(const b of after.bindings??[])b.surfaceHash=digest;for(const m of after.markings??[]){m.surfaceHash=digest;if(m.placement)m.placement.reviewed=false;}after.surfaceRun=undefined;after.previewMarkings=undefined;}
+      else if(command.type==='surface.anatomy')applyModelAnatomy(after,command);
       else if(command.type==='workflow.node'){if(!workflowNodes(after).some(n=>n.key===command.node.key))throw new DomainError('ENTITY_MISSING');after.workflow=[...(after.workflow??[]).filter(n=>n.key!==command.node.key),command.node];}
       else if(command.type==='model.rename'){const model=after.modelLibrary?.find(m=>m.id===command.modelId);if(!model)throw new DomainError('ENTITY_MISSING');model.name=command.name;}
       else if(command.type==='model.activate'||command.type==='model.delete'){

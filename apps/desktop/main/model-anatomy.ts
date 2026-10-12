@@ -1,7 +1,26 @@
 import {bodyRegions} from '../../../packages/surface/body-regions';
-import type {Surface} from '../../../packages/schema/index';
+import {surfaceSchema,type Surface,type Project,type Command} from '../../../packages/schema/index';
 import {namedPart,type BodySide} from '../../../packages/reference/body-parts';
-import {DomainError} from './repository';
+import {DomainError,hash} from './repository';
+import {bindingIssues,cutColorHash} from './surface';
+import {staleMarkingIds} from './markings';
+
+/** Classification changes metadata, never the geometry of a saved mapping. */
+export function applyModelAnatomy(project:Project,command:Extract<Command,{type:'surface.anatomy'}>){
+ const surface=project.surface;if(!surface)throw new DomainError('SURFACE_MISSING');
+ const stale=staleMarkingIds(project),invalidBindings=new Set(bindingIssues(project).filter(i=>i.severity==='error').map(i=>i.entityId));
+ const validBindings=new Set(project.bindings?.filter(b=>!invalidBindings.has(b.pieceId)&&project.pieces.some(p=>p.id===b.pieceId)).map(b=>b.pieceId));
+ const names=new Map(command.faceRegions?.map(f=>[f.faceId,f.region]));
+ project.surface=surfaceSchema.parse({...surface,faces:surface.faces.map(f=>({...f,region:names.get(f.id)??f.region})),partAssignments:command.assignments});
+ const digest=hash(JSON.stringify(project.surface));
+ for(const m of project.markings??[]){
+  if(!stale.has(m.id))m.surfaceHash=digest;
+  if(m.placement)m.placement.reviewed=false;
+ }
+ const colors=cutColorHash(project);
+ for(const b of project.bindings??[])if(validBindings.has(b.pieceId)){b.surfaceHash=digest;if(b.colorHash)b.colorHash=colors;}
+ project.surfaceRun=undefined;project.previewMarkings=undefined;
+}
 export function classifyModel(mesh:Surface,kind:'body'|'body-feet'|'head'|'paw'|'foot',footBoundaryMm?:number,requestedSide:BodySide='unknown'){
  let minY=Infinity,maxY=-Infinity;for(const v of mesh.vertices){minY=Math.min(minY,v.yMm);maxY=Math.max(maxY,v.yMm);}const boundary=footBoundaryMm??minY+(maxY-minY)*.15;
  if(kind==='body-feet'&&(!Number.isFinite(boundary)||boundary<=minY||boundary>=maxY))throw new DomainError('INVALID_CALIBRATION');
