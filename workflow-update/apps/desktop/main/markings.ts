@@ -1,5 +1,7 @@
 import {contextRegion,placementAnatomies,type PlacementContext} from '../../../packages/reference/placement-registration';
 import {placementMatchesModel} from '../../../packages/reference/placement-review';
+import {markingFingerprint} from './marking-fingerprint';
+export {markingFingerprint} from './marking-fingerprint';
 import {derivedName} from '../../../packages/schema/names';
 import {partName,sideName} from '../../../packages/reference/body-parts';
 import {surfaceSpline} from '../../../packages/surface/spline';
@@ -44,7 +46,6 @@ export async function clip(worker:string,jobs:Job[],precisionDigits=4):Promise<X
  const flush=async()=>{if(!batch.length)return;const result=schema.parse(await request(worker,{protocolVersion:1,operation:'geometry.clip',jobs:batch.map(job=>({...job,precisionDigits}))}));if(result.results.length!==batch.length)throw new DomainError('WORKER_PROTOCOL');results.push(...result.results.map(r=>r.rings));batch=[];points=0;};
  for(const job of jobs){const n=[...job.subjects,...job.clips??[],...job.subtract??[]].reduce((s,r)=>s+r.length,0);if(batch.length>=500||points+n>50000)await flush();if(n>200000)throw new DomainError('PROJECTION_LIMIT');batch.push(job);points+=n;}await flush();return results;
 }
-export const markingFingerprint=(m:Marking)=>hash(JSON.stringify({fragments:m.fragments,paths:m.paths,color:m.color,surfaceHash:m.surfaceHash,placement:m.placement}));
 export function staleMarkingIds(project:Project,checkPaths=true):Set<string>{
  const surfaceHash=project.surface?hash(JSON.stringify(project.surface)):null,markings=project.markings??[];
  const baseStale=(m:Marking)=>{const source=markingSource(project,m.sourcePieceId);const archived=m.source==='cut-library'&&project.cuttingLibrary?.some(e=>e.id===m.cutLibraryId&&e.markings.some(original=>original.id===m.id&&original.sourceHash===(m.cutLibrarySourceHash??m.sourceHash)));return (m.source==='cut-library'&&!archived)||(archived&&!!m.surfaceShape&&m.sourceHash!==hash(JSON.stringify(m.surfaceShape)))||(!archived&&!placementMatchesModel(project,m))||!project.surface||m.surfaceId!==project.surface.id||m.topologyVersion!==project.surface.topologyVersion||m.surfaceHash!==surfaceHash||(!archived&&!m.inference&&(m.surfaceShape?m.sourceHash!==hash(JSON.stringify(m.surfaceShape)):m.textureId?!project.surface.textures?.some(t=>t.id===m.textureId&&t.sha256===m.sourceHash):!source||m.sourceHash!==pieceGeometryHash(source)))||checkPaths&&m.paths.some(path=>{const piece=project.pieces.find(p=>p.id===path.pieceId);return !piece||path.geometryHash!==pieceGeometryHash(piece);});};
